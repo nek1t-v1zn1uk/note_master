@@ -1,15 +1,34 @@
+# Gradle
+.gradle/
+build/
+*/build/
+
+# Android Studio
+.idea/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+*.ipr
+*.iws
+
+# Local config
 local.properties
+*.keystore
+
+# Log/OS files
+*.log
+*.DS_Store
+*.swp
+
+# Kotlin specific
+*.class
+*.jar
+*.war
+*.ear
+
+# Cache
+.cxx/
+captures/
+.externalNativeBuild/
+
+# Generated files
+gen/
+out/
