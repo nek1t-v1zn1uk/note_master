@@ -70,8 +70,8 @@ class MainActivity : ComponentActivity() {
 fun MyApp() {
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = "home") {
-        composable("home") { HomeScreen(navController) }
-        composable("profile") { NoteListPreview() }
+        composable("home") { NoteListPreview() }
+        composable("profile") { HomeScreen(navController) }
     }
 }
 
