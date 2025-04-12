@@ -2,6 +2,7 @@ package com.example.notemaster
 
 import android.R
 import android.R.attr.delay
+import android.util.Log
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -72,12 +73,15 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.Wallpapers
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
 import com.example.notemaster.ui.theme.NoteMasterTheme
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -87,7 +91,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NoteList(list: Array<Note>){
+fun NoteList(list: Array<Note>, navController: NavController){
 
     var isCheckState by remember { mutableStateOf(false) }
 
@@ -109,19 +113,16 @@ fun NoteList(list: Array<Note>){
                     ),
                     actions = {
                         if(isCheckState) {
-                            Button(
-                                onClick = {
-                                    isCheckState = false
-                                },
-
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
                                 modifier = Modifier
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                )
-                            }
+                                    .size(height = 40.dp, width = 60.dp)
+                                    .padding(end = 20.dp)
+                                    .clickable(onClick = {
+                                        isCheckState = false
+                                    })
+                            )
                         }
                     },
                     modifier = Modifier
@@ -257,7 +258,7 @@ fun NoteList(list: Array<Note>){
                             spotColor = Color.Black.copy(alpha = 1f),
                             clip = true
                         )
-                        .background(if(!isChecked)Color.White else Color.Gray, RoundedCornerShape(16.dp))
+                        .background(if(!isChecked)Color.White else Color.LightGray, RoundedCornerShape(16.dp))
                         .padding(vertical = 20.dp, horizontal = 15.dp)
                         .pointerInput(Unit) {
                             coroutineScope {
@@ -268,15 +269,20 @@ fun NoteList(list: Array<Note>){
                                         // Launch coroutine to detect long press
                                         val longPressJob = launch {
                                             delay(500)
-                                            isCheckState = true
+                                            if(scale==0.90f)
+                                                isCheckState = true
                                         }
 
                                         val released = tryAwaitRelease()
 
                                         if (released) {
                                             longPressJob.cancel()
-                                            if(isCheckState)
+                                            if(isCheckState) {
                                                 isChecked = !isChecked
+                                            } else{
+                                                Log.d("NavArgs", "index: ${list.indexOf(item)}")
+                                                navController.navigate("note_page/${list.indexOf(item)}")
+                                            }
                                         }
 
                                         isPressed = false
@@ -317,103 +323,6 @@ fun NoteList(list: Array<Note>){
     }
 }
 
-@Composable
-fun NoteListHeader(){
-
-}
-
-@Composable
-fun NoteListMContent(list: Array<Note>, modifier: Modifier){
-    /*val scrollState = rememberScrollState()
-    Column(
-        verticalArrangement = Arrangement.spacedBy(15.dp),
-        modifier = modifier
-            .padding(horizontal = 10.dp)
-            .verticalScroll(scrollState)
-    ) {
-        Divider(
-            thickness = 10.dp,
-            color = Color.White
-        )
-        for(item in list){
-            var isPressed by remember { mutableStateOf(false) }
-            val fastInSlowOut = tween<Float>(
-                durationMillis = 300,
-                easing = {
-                    if (it < 0.15f) it * 2f // faster start
-                    else 1f - (1f - it) * (1f - it) // ease out
-                }
-            )
-            val scale by animateFloatAsState(
-                targetValue = if (isPressed) 0.90f else 1f,
-                animationSpec = fastInSlowOut,
-                label = "PressScale"
-            )
-
-            var isCheckState by remember { mutableStateOf(false) }
-            var isChecked by remember { mutableStateOf(false) }
-
-            Box(
-                modifier = Modifier
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale
-                    )
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .shadow(
-                        elevation = 4.dp,
-                        shape = RoundedCornerShape(16.dp),
-                        ambientColor = Color.Black.copy(alpha = 1f),
-                        spotColor = Color.Black.copy(alpha = 1f),
-                        clip = true
-                    )
-                    .background(Color.White, RoundedCornerShape(16.dp))
-                    .padding(vertical = 20.dp, horizontal = 15.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = {
-                                isPressed = true
-                                tryAwaitRelease()
-                                isPressed = false
-                                // perform your click action here if needed
-                            }
-                        )
-                    }
-
-            ) {
-                Text(
-                    text = item.name,
-                    fontSize = 18.sp
-                )
-
-                Box(
-                    contentAlignment = Alignment.CenterEnd,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(end = 10.dp)
-
-                ) {
-                    Icon(
-                        imageVector = if(isChecked) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
-                        tint = Color.Yellow,
-                        contentDescription = "Checked",
-                        modifier = Modifier
-                    )
-                }
-            }
-        }
-        Divider(
-            thickness = 15.dp,
-            color = Color.White
-        )
-    }*/
-}
-
-@Composable
-fun NoteListFooter(){
-
-}
 
 
 @Preview(showBackground = true,
@@ -435,6 +344,6 @@ fun NoteListPreview(){
         Note("Закупки", "no content")
     )
     NoteMasterTheme{
-        NoteList(list)
+        NoteList(list, rememberNavController())
     }
 }

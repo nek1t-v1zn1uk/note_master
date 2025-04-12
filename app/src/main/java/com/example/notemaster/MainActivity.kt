@@ -2,6 +2,7 @@ package com.example.notemaster
 
 import android.R
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -45,11 +46,12 @@ import androidx.compose.ui.tooling.preview.Wallpapers
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.navigation.NavType
 import androidx.navigation.compose.rememberNavController
 import com.example.notemaster.ui.theme.NoteMasterTheme
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-
+import androidx.navigation.navArgument
 
 
 class MainActivity : ComponentActivity() {
@@ -68,9 +70,36 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MyApp() {
+    Log.d("NavArgs", "NotePage opened")
+
+
+    val list by remember { mutableStateOf(arrayOf<Note>(
+        Note("Лабораторні", "no content"),
+        Note("Курсовий проект", "no content"),
+        Note("Днюхи", "no content"),
+        Note("Велосипед", "no content"),
+        Note("Закупки", "no content"),
+        Note("Закупки", "no content"),
+        Note("Закупки", "no content"),
+        Note("Закупки", "no content"),
+        Note("Закупки", "no content"),
+        Note("Закупки", "no content")
+    )
+    )}
+
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = "home") {
-        composable("home") { NoteListPreview() }
+        composable("home") { NoteList(list, navController) }
+        composable(
+            route = "note_page/{noteId}",
+            arguments = listOf(navArgument("noteId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            Log.d("NavArgs", "list size: ${list.size}")
+            val noteId = backStackEntry.arguments?.getInt("noteId")!!
+            Log.d("NavArgs", "Received noteId: $noteId, list size: ${list.size}")
+
+            NotePage(list[noteId])
+        }
         composable("profile") { HomeScreen(navController) }
     }
 }
