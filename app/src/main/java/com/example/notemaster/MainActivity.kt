@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -43,7 +44,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.Wallpapers
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
 import com.example.notemaster.ui.theme.NoteMasterTheme
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,10 +59,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             NoteMasterTheme {
                 Surface {
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(55.dp)
-                    )
+                    MyApp()
                 }
             }
         }
@@ -63,122 +67,18 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun NoteList(list: Array<Note>, modifier: Modifier = Modifier){
-    Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = modifier
-            .padding(16.dp)
-    ) {
-        for(item: Note in list) {
-            Box(
-                contentAlignment = Alignment.CenterStart,
-                modifier = modifier
-                    .shadow(
-                        elevation = 8.dp,
-                        shape = RoundedCornerShape(16.dp),
-                        clip = true
-                    )
-                    .background(
-                        color = Color.White,
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                    .fillMaxWidth()
-                    .height(50.dp)
-            ) {
-                Text(
-                    fontSize = 24.sp,
-                    text = if (item.name.isEmpty()) "Empty" else item.name,
-                    modifier = modifier
-                        .padding(start = 16.dp)
-                )
-                var isContextMenu by remember { mutableStateOf(false) }
-                IconButton(
-                    onClick = {
-                        isContextMenu = true
-                              },
-                    modifier = modifier
-                        .align(Alignment.CenterEnd)
-                        //.background(Color.Red)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = "!2#More options",
-                        modifier = modifier
-                            .size(50.dp)
-                            .graphicsLayer(scaleX = 0.6f, scaleY = 0.6f)
-                    )
-                DropdownMenu(
-                    expanded = isContextMenu,
-                    onDismissRequest = { isContextMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        onClick = {
-                            isContextMenu = false
-                        },
-                        text = {
-                        Text(
-                            text = "Action 1"
-                        )
-                        }
-                    )
-                    DropdownMenuItem(
-                        onClick = {
-                            isContextMenu = false
-                        },
-                        text = {
-                            Text(
-                                text = "Action 2"
-                            )
-                        }
-                    )
-                    DropdownMenuItem(
-                        onClick = {
-                            isContextMenu = false
-                        },
-                        text = {
-                            Text(
-                                text = "Action 3"
-                            )
-                        }
-                    )
-                }
-
-                }
-            }
-        }
-    }
-}
-
-@Preview(showBackground = true,
-    device = "spec:width=393dp,height=873dp", name = "MyXiaomi", apiLevel = 35,
-    wallpaper = Wallpapers.GREEN_DOMINATED_EXAMPLE
-)
-@Composable
-fun NoteListPreview(){
-    val list = arrayOf<Note>(
-        Note("Лабораторні", "no content"),
-        Note("Курсовий проект", "no content"),
-        Note("Днюхи", "no content"),
-        Note("Велосипед", "no content"),
-        Note("Закупки", "no content")
-    )
-    NoteMasterTheme {
-        NoteList(list)
+fun MyApp() {
+    val navController = rememberNavController()
+    NavHost(navController = navController, startDestination = "home") {
+        composable("home") { HomeScreen(navController) }
+        composable("profile") { NoteListPreview() }
     }
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    NoteMasterTheme {
-        Greeting("Android")
+fun HomeScreen(navController: NavController) {
+    // UI for Home screen and a button to navigate
+    Button(onClick = { navController.navigate("profile") }) {
+        Text("Go to Profile")
     }
 }
