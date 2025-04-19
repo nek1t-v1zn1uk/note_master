@@ -30,6 +30,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
         jvmTarget = "11"
@@ -60,6 +62,7 @@ dependencies {
 
     implementation(platform("androidx.compose:compose-bom:2025.02.00"))
     implementation("androidx.compose.material:material-icons-extended:<version>")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
 
 }

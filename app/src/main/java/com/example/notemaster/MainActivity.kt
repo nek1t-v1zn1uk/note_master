@@ -98,7 +98,7 @@ fun MyApp() {
             val noteId = backStackEntry.arguments?.getInt("noteId")!!
             Log.d("NavArgs", "Received noteId: $noteId, list size: ${list.size}")
 
-            NotePage(list[noteId])
+            NotePage(list[noteId], navController)
         }
         composable("profile") { HomeScreen(navController) }
     }
