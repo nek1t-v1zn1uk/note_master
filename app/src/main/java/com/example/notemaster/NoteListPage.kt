@@ -2,14 +2,15 @@ package com.example.notemaster
 
 import android.R
 import android.R.attr.delay
+import android.app.Activity
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -63,9 +64,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +80,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.Wallpapers
 import androidx.compose.ui.unit.dp
@@ -86,7 +91,43 @@ import com.example.notemaster.ui.theme.NoteMasterTheme
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.*
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
+@Composable
+fun HandleBackPress(
+    isCheckState: Boolean,
+    onClearCheckState: () -> Unit,
+    navController: NavController
+) {
+    val activity = LocalContext.current as? Activity
+    val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+    val currentCheckState by rememberUpdatedState(isCheckState)
+
+    DisposableEffect(dispatcher, currentCheckState) {
+        if (dispatcher == null) return@DisposableEffect onDispose {}
+
+        val callback = object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (currentCheckState) {
+                    onClearCheckState()
+                } else {
+                    val popped = navController.popBackStack()
+                    if (!popped) {
+                        activity?.finish() // close app if nothing to pop
+                    }
+                }
+            }
+        }
+
+        dispatcher.addCallback(callback)
+        onDispose { callback.remove() }
+    }
+}
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,6 +135,12 @@ import kotlinx.coroutines.launch
 fun NoteList(list: Array<Note>, navController: NavController){
 
     var isCheckState by remember { mutableStateOf(false) }
+
+    HandleBackPress(
+        isCheckState = isCheckState,
+        onClearCheckState = { isCheckState = false },
+        navController = navController
+    )
 
     Scaffold(
         containerColor = Color.White,
@@ -259,7 +306,7 @@ fun NoteList(list: Array<Note>, navController: NavController){
                             clip = true
                         )
                         .background(if(!isChecked)Color.White else Color.LightGray, RoundedCornerShape(16.dp))
-                        .padding(vertical = 20.dp, horizontal = 15.dp)
+                        .padding(top = 20.dp, bottom = 10.dp, start = 15.dp, end = 15.dp)
                         .pointerInput(Unit) {
                             coroutineScope {
                                 detectTapGestures(
@@ -292,11 +339,29 @@ fun NoteList(list: Array<Note>, navController: NavController){
                         }
 
                 ) {
-                    Text(
-                        text = item.name,
-                        fontSize = 18.sp
-                    )
+                    Column (
+                        verticalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxSize()
+                    ){
+                        Text(
+                            text = item.name,
+                            fontSize = 18.sp
+                        )
 
+                        Text(
+                            text = item.lastEdit.format(
+                                DateTimeFormatter.ofPattern(
+                                    "dd MMMM HH:mm",
+                                    Locale("uk")
+                                )
+                            ),
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                    }
+
+                    
                     if(isCheckState) {
                         Box(
                             contentAlignment = Alignment.CenterEnd,
@@ -332,16 +397,16 @@ fun NoteList(list: Array<Note>, navController: NavController){
 @Composable
 fun NoteListPreview(){
     val list = arrayOf<Note>(
-        Note("Лабораторні", "no content"),
-        Note("Курсовий проект", "no content"),
-        Note("Днюхи", "no content"),
-        Note("Велосипед", "no content"),
-        Note("Закупки", "no content"),
-        Note("Закупки", "no content"),
-        Note("Закупки", "no content"),
-        Note("Закупки", "no content"),
-        Note("Закупки", "no content"),
-        Note("Закупки", "no content")
+        Note("Лабораторні"),
+        Note("Курсовий проект"),
+        Note("Днюхи"),
+        Note("Велосипед"),
+        Note("Закупки"),
+        Note("Закупки"),
+        Note("Закупки"),
+        Note("Закупки"),
+        Note("Закупки"),
+        Note("Закупки")
     )
     NoteMasterTheme{
         NoteList(list, rememberNavController())

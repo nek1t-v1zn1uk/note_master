@@ -74,16 +74,16 @@ fun MyApp() {
 
 
     val list by remember { mutableStateOf(arrayOf<Note>(
-        Note("Лабораторні", "no content"),
-        Note("Курсовий проект", "no content"),
-        Note("Днюхи", "no content"),
-        Note("Велосипед", "no content"),
-        Note("Закупки", "no content"),
-        Note("Закупки", "no content"),
-        Note("Закупки", "no content"),
-        Note("Закупки", "no content"),
-        Note("Закупки", "no content"),
-        Note("Закупки", "no content")
+        Note("Лабораторні"),
+        Note("Курсовий проект"),
+        Note("Днюхи"),
+        Note("Велосипед"),
+        Note("Закупки"),
+        Note("Закупки"),
+        Note("Закупки"),
+        Note("Закупки"),
+        Note("Закупки"),
+        Note("Закупки")
     )
     )}
 
