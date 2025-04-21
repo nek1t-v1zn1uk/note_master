@@ -74,11 +74,11 @@ fun MyApp() {
 
 
     val list by remember { mutableStateOf(arrayOf<Note>(
-        Note("Лабораторні"),
-        Note("Курсовий проект"),
-        Note("Днюхи"),
-        Note("Велосипед"),
-        Note("Закупки"),
+        Note("Лабораторні", Content(mutableListOf(ItemText("Sheesh\nWeed\nCoke")))),
+        Note("Курсовий проект", Content(mutableListOf(ItemText("Sheesh\nWeed\nCoke")))),
+        Note("Днюхи", Content(mutableListOf(ItemText("Sheesh\nWeed\nCoke")))),
+        Note("Велосипед", Content(mutableListOf(ItemText("Sheesh\nWeed\nCoke")))),
+        Note("Закупки", Content(mutableListOf(ItemText("Sheesh\nWeed\nCoke")))),
         Note("Закупки"),
         Note("Закупки"),
         Note("Закупки"),

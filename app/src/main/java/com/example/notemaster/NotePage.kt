@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,6 +53,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
@@ -59,6 +62,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
@@ -119,20 +123,20 @@ fun OnKeyboardStartShowing(onStartShowing: () -> Unit) {
     }
 }
 
-
+class FocusedItem {
+    companion object {
+        var indexInList: Int = -1
+        var indexInItem: Int = 0
+        var updateValue: (String) -> Unit = {}
+        var changeNeeded: Boolean = false
+        var cursorStart: Int = 0
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotePage(note: Note, navController: NavController){
-    var isEdit by remember { mutableStateOf(false) }
-
-    var text by remember { mutableStateOf(note.content) }
-    var name by remember { mutableStateOf(note.name) }
-
     var isKeyboard by remember { mutableStateOf(false) }
-
-    var cursorPosition by remember { mutableStateOf(mutableMapOf("indexInList" to 0, "indexInItem" to 0)) }
-
 
     val focusManager = LocalFocusManager.current
     OnKeyboardStartShowing {
@@ -202,50 +206,46 @@ fun NotePage(note: Note, navController: NavController){
                         }
                         IconButton(
                             onClick = {
-                                val item = note.content.list.get(cursorPosition["indexInList"]!!)
+                                val item = note.content.list.get(FocusedItem.indexInList)
                                 if(item is ItemText) {
-                                    note.content.list.removeAt(cursorPosition["indexInList"]!!)
 
                                     var firstText = ""
                                     var checkBoxText = ""
                                     var lastText = ""
 
-                                    var indexOfEnterBefore = -1
-                                    var i = 0
-                                    for (c in item.text){
-                                        if(i == cursorPosition["indexInItem"])
-                                            break
-                                        if(c == '\n')
-                                            indexOfEnterBefore = i
-                                        i++
+                                    var i = FocusedItem.indexInItem
+                                    var indexBefore = i - 1
+                                    var indexAfter = i
+                                    while(indexBefore != 0 && item.text[indexBefore] != '\n'){
+                                        indexBefore--
                                     }
-                                    if(indexOfEnterBefore != -1) {
-                                        firstText = item.text.substring(0, indexOfEnterBefore)
-                                        checkBoxText = item.text.substring(indexOfEnterBefore, item.text.length)
+                                    while(indexAfter != item.text.length && item.text[indexAfter] != '\n'){
+                                        indexAfter++
                                     }
-                                    else
-                                        firstText = ""
 
 
-                                    var indexOfEnter = checkBoxText.indexOfFirst { it == '\n' }
+                                    lastText = item.text.substring(indexAfter, item.text.length)
+                                    checkBoxText = item.text.substring(indexBefore + 1, indexAfter)
+                                    if(indexBefore != 0)
+                                        firstText = item.text.substring(0, indexBefore)
 
-                                    checkBoxText = checkBoxText.substring(0, indexOfEnter)
-
-                                    lastText = item.text.substring(indexOfEnter, item.text.length)
+                                    val tempIndexInList = FocusedItem.indexInList
+                                    FocusedItem.changeNeeded = true
+                                    FocusedItem.indexInList += 1
+                                    FocusedItem.cursorStart = FocusedItem.indexInItem - firstText.length
 
                                     note.content.list.add(
-                                        cursorPosition["indexInList"]!!,
-                                        ItemText(lastText, style = item.style)
-                                    )
-                                    note.content.list.add(
-                                        cursorPosition["indexInList"]!!,
+                                        tempIndexInList,
                                         ItemCheckBox(checkBoxText, style = item.style)
                                     )
-                                    if(indexOfEnterBefore != -1)
+                                    if(indexBefore != 0)
                                         note.content.list.add(
-                                            cursorPosition["indexInList"]!!,
+                                            tempIndexInList,
                                             ItemText(firstText, style = item.style)
                                         )
+
+                                    item.text = lastText
+                                    FocusedItem.updateValue(firstText)
                                 }
                             },
                             modifier = Modifier
@@ -315,18 +315,8 @@ fun NotePage(note: Note, navController: NavController){
         }
     ) {
         innerPadding ->
-        val setCursorPosition = { indexInList: Int, indexInItem: Int ->
-            cursorPosition["indexInList"] = indexInList
-            cursorPosition["indexInItem"] = indexInItem
-        }
-        val setNoteText = { indexInList: Int, text: String ->
-            val item = note.content.list.get(indexInList)
-            if(item is ItemText)
-                item.text = text
-        }
+
         NoteContent(note,
-            setCursorPosition,
-            setNoteText,
             Modifier.padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
         )
@@ -389,8 +379,6 @@ fun NotePage(note: Note, navController: NavController){
 @Composable
 fun NoteContent(
     note: Note,
-    setCursorPosition: (Int, Int) -> Unit,
-    setNoteText: (Int, String) -> (Unit),
     modifier: Modifier){
 
     val density = LocalDensity.current
@@ -417,19 +405,19 @@ fun NoteContent(
         var remainingHeight = with(density) { lazyColumnHeightPx.toDp() }
 
         items(content.size) { index ->
-            val setCursorPositionHere = { indexInItem: Int ->
-                setCursorPosition(index, indexInItem)
-            }
-            val setNoteTextHere = { text: String ->
-                setNoteText(index, text)
-            }
+            val focusRequester = remember { FocusRequester() }
             var modifierPart: Modifier = Modifier
 
             val item = content[index]
 
             if(item is ItemText) {
                 if(item is ItemCheckBox){
-                    CheckBoxPart(item.text, item.hasCheckBox, setCursorPositionHere)
+                    CheckBoxPart(
+                        item.text,
+                        item.hasCheckBox,
+                        index,
+                        focusRequester
+                    )
                 }
                 else {
                     if(index == content.lastIndex){
@@ -438,8 +426,8 @@ fun NoteContent(
 
                     TextPart(
                         item.text,
-                        setCursorPositionHere,
-                        setNoteTextHere,
+                        index,
+                        focusRequester,
                         modifierPart.fillMaxSize()
                     )
                 }
@@ -498,17 +486,29 @@ fun NoteContentTop(name: String, date: LocalDateTime, symbolCount: Int, modifier
 @Composable
 fun TextPart(
     value: String,
-    setCursorPosition: (Int) -> Unit,
-    setNoteText: (String) -> Unit,
+    indexInList: Int,
+    focusRequester: FocusRequester,
     modifier: Modifier = Modifier){
     var textFieldValue by remember { mutableStateOf(TextFieldValue(value)) }
+
+    LaunchedEffect(Unit) {
+        if (indexInList == FocusedItem.indexInList && FocusedItem.changeNeeded) {
+            Log.d("Shit", "TB - indexInList:${indexInList}; ")
+            focusRequester.requestFocus()
+            textFieldValue = textFieldValue.copy(selection = TextRange(FocusedItem.cursorStart))
+            FocusedItem.changeNeeded = false
+        }
+    }
     TextField(
         value = textFieldValue,
         onValueChange = { newValue ->
             textFieldValue = newValue
 
-            setCursorPosition(newValue.selection.start)
-            setNoteText(textFieldValue.text)
+            FocusedItem.indexInList = indexInList
+            FocusedItem.indexInItem = newValue.selection.start
+            FocusedItem.updateValue = { value: String ->
+                textFieldValue = textFieldValue.copy(text = value)
+            }
 
             /*
             val selection = newValue.selection
@@ -522,13 +522,29 @@ fun TextPart(
         maxLines = Int.MAX_VALUE,
         textStyle = TextStyle(fontSize = 18.sp),
         modifier = modifier
+            .focusRequester(focusRequester)
+            .focusable()
     )
 }
 
 @Composable
-fun CheckBoxPart(value: String, isChecked: Boolean = false, setCursorPosition: (Int) -> Unit,  modifier: Modifier = Modifier){
+fun CheckBoxPart(
+    value: String,
+    isChecked: Boolean = false,
+    indexInList: Int,
+    focusRequester: FocusRequester,
+    modifier: Modifier = Modifier){
     var textFieldValue by remember { mutableStateOf(TextFieldValue(value)) }
     var isCheckedValue by remember { mutableStateOf(isChecked) }
+
+    LaunchedEffect(Unit) {
+        if(indexInList == FocusedItem.indexInList && FocusedItem.changeNeeded){
+            Log.d("Shit", "CB - indexInList:${indexInList}; ")
+            focusRequester.requestFocus()
+            textFieldValue = textFieldValue.copy(selection = TextRange(FocusedItem.cursorStart))
+            FocusedItem.changeNeeded = false
+        }
+    }
     Row(
         modifier = modifier
     ) {
@@ -540,8 +556,6 @@ fun CheckBoxPart(value: String, isChecked: Boolean = false, setCursorPosition: (
             value = textFieldValue,
             onValueChange = { newValue ->
                 textFieldValue = newValue
-
-                setCursorPosition(newValue.selection.start)
 
                 /*
                 val selection = newValue.selection
@@ -556,6 +570,8 @@ fun CheckBoxPart(value: String, isChecked: Boolean = false, setCursorPosition: (
             textStyle = TextStyle(fontSize = 18.sp),
             modifier = modifier
                 .fillMaxWidth()
+                .focusRequester(focusRequester)
+                .focusable()
         )
     }
 }
