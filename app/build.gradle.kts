@@ -63,6 +63,8 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2025.02.00"))
     implementation("androidx.compose.material:material-icons-extended:<version>")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    implementation("io.coil-kt:coil-compose:2.4.0")
+
 
 
 }

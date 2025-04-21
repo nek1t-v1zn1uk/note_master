@@ -72,13 +72,15 @@ class MainActivity : ComponentActivity() {
 fun MyApp() {
     Log.d("NavArgs", "NotePage opened")
 
+    var cont = Content()
+    cont.addComponent(0, ItemText("Sheesh\nWeed\nCoke"))
 
     val list by remember { mutableStateOf(arrayOf<Note>(
-        Note("Лабораторні", Content(mutableListOf(ItemText("Sheesh\nWeed\nCoke")))),
-        Note("Курсовий проект", Content(mutableListOf(ItemText("Sheesh\nWeed\nCoke")))),
-        Note("Днюхи", Content(mutableListOf(ItemText("Sheesh\nWeed\nCoke")))),
-        Note("Велосипед", Content(mutableListOf(ItemText("Sheesh\nWeed\nCoke")))),
-        Note("Закупки", Content(mutableListOf(ItemText("Sheesh\nWeed\nCoke")))),
+        Note("Лабораторні", cont),
+        Note("Курсовий проект", cont),
+        Note("Днюхи", cont),
+        Note("Велосипед", cont),
+        Note("Закупки", cont),
         Note("Закупки"),
         Note("Закупки"),
         Note("Закупки"),

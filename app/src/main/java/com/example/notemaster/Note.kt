@@ -1,6 +1,9 @@
 package com.example.notemaster
 
+import android.net.Uri
 import android.util.Log
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.unit.dp
 import java.time.LocalDateTime
 import java.util.Dictionary
@@ -38,6 +41,14 @@ class Content(list: MutableList<ContentItem> = mutableListOf()) {
             _list.addAll(value)
         }
 
+    companion object{
+        var lastId: Int = 0
+    }
+    fun addComponent(index: Int, item: ContentItem){
+        item.id = lastId
+        _list.add(index, item)
+        lastId++
+    }
 
     init{
         this.list = list
@@ -54,7 +65,7 @@ class Content(list: MutableList<ContentItem> = mutableListOf()) {
 }
 
 abstract class ContentItem() {
-
+    var id: Int = 0
 }
 
 open class ItemText(
@@ -88,6 +99,8 @@ class ItemCheckBox(
     }
 }
 
-class ItemImage : ContentItem() {
+class ItemImage(
+    var uri: Uri
+) : ContentItem() {
 
 }

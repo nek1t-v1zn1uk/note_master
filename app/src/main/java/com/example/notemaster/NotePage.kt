@@ -1,8 +1,12 @@
 package com.example.notemaster
 
 import android.annotation.SuppressLint
+import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
@@ -48,6 +52,7 @@ import androidx.compose.material3.TopAppBarColors
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +76,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.text.trimmedLength
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import coil.compose.rememberAsyncImagePainter
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -147,6 +153,62 @@ fun NotePage(note: Note, navController: NavController){
         isKeyboard = false
     }
 
+    var imageUri = remember { mutableStateOf<Uri?>(null) }
+    val waitingForImage = remember { mutableStateOf(false) }
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri ->
+            imageUri.value = null
+            imageUri.value = uri
+            waitingForImage.value = false // Done waiting
+        }
+    )
+    fun openGallery() {
+        waitingForImage.value = true
+        launcher.launch("image/*")
+    }
+    //starts when image is pressed
+    LaunchedEffect(imageUri.value) {
+        imageUri.value?.let { uri ->
+            // This block is only triggered after image is selected!
+            val newImageItem = ItemImage(uri)
+
+            var item = note.content.list[FocusedItem.indexInList]
+            if(item is ItemText) {
+                var indexInListOfNewImage = -1
+
+                if (FocusedItem.indexInItem == 0) {
+                    indexInListOfNewImage = 0
+                } else if (FocusedItem.indexInItem == item.text.length) {
+                    indexInListOfNewImage = FocusedItem.indexInList + 1
+                    if (FocusedItem.indexInList == note.content.list.size - 1)
+                        note.content.addComponent(
+                            FocusedItem.indexInList + 1,
+                            ItemText("", style = item.style)
+                        )
+                } else {
+                    indexInListOfNewImage = FocusedItem.indexInList + 1
+                    var firstText = item.text.substring(0, FocusedItem.indexInItem)
+                    var secondText =
+                        item.text.substring(FocusedItem.indexInItem, item.text.length)
+                    Log.d("Shit", "item.text:${item.text};  firstText:${firstText}; secondText:${secondText};")
+                    item.text = firstText
+                    note.content.addComponent(
+                        FocusedItem.indexInList + 1,
+                        ItemText(secondText, style = item.style)
+                    )
+                    FocusedItem.updateValue(firstText)
+                }
+
+                note.content.addComponent(
+                    indexInListOfNewImage,
+                    newImageItem
+                )
+                imageUri.value = null
+            }
+        }
+    }
+
     Scaffold(
         containerColor = Color.White,
         modifier = Modifier
@@ -181,7 +243,9 @@ fun NotePage(note: Note, navController: NavController){
                 ) {
                     Row {
                         IconButton(
-                            onClick = {},
+                            onClick = {
+                                openGallery()
+                            },
                             modifier = Modifier
                                 .weight(1f)
                         ) {
@@ -234,12 +298,12 @@ fun NotePage(note: Note, navController: NavController){
                                     FocusedItem.indexInList += 1
                                     FocusedItem.cursorStart = FocusedItem.indexInItem - firstText.length
 
-                                    note.content.list.add(
+                                    note.content.addComponent(
                                         tempIndexInList,
                                         ItemCheckBox(checkBoxText, style = item.style)
                                     )
                                     if(indexBefore != 0)
-                                        note.content.list.add(
+                                        note.content.addComponent(
                                             tempIndexInList,
                                             ItemText(firstText, style = item.style)
                                         )
@@ -400,6 +464,53 @@ fun NoteContent(
                         .padding(bottom = 16.dp)
             )
         }
+        val content: MutableList<ContentItem> = note.content.list
+
+        val remainingHeight = with(density) { lazyColumnHeightPx.toDp() }
+        Log.d("Shit", "123")
+        items(
+            count = content.size,
+            key = { content[it].id } // 👈 This ensures Compose tracks each item correctly
+        ) { index ->
+            Log.d("Shit", "123")
+            val focusRequester = remember { FocusRequester() }
+            var modifierPart: Modifier = Modifier
+            val item = content[index]
+
+            when (item) {
+                is ItemCheckBox -> {
+                    CheckBoxPart(
+                        item.text,
+                        item.hasCheckBox,
+                        index,
+                        focusRequester
+                    )
+                }
+
+                is ItemText -> {
+                    if (index == content.lastIndex) {
+                        modifierPart = modifierPart.heightIn(min = remainingHeight)
+                    }
+                    TextPart(
+                        item.text,
+                        index,
+                        focusRequester,
+                        modifierPart.fillMaxSize()
+                    )
+                }
+
+                is ItemImage -> {
+                    Image(
+                        painter = rememberAsyncImagePainter(item.uri),
+                        contentDescription = null,
+                        modifier = Modifier.size(200.dp)
+                    )
+                }
+            }
+        }
+
+
+        /*
         var content: MutableList<ContentItem> = note.content.list
 
         var remainingHeight = with(density) { lazyColumnHeightPx.toDp() }
@@ -433,9 +544,13 @@ fun NoteContent(
                 }
             }
             else if(item is ItemImage){
-                TODO()
+                Image(
+                    painter = rememberAsyncImagePainter(item.uri),
+                    contentDescription = null,
+                    modifier = Modifier.size(200.dp)
+                )
             }
-        }
+        }*/
     }
 }
 
@@ -582,6 +697,7 @@ fun CheckBoxPart(
 @Preview(wallpaper = androidx.compose.ui.tooling.preview.Wallpapers.NONE)
 @Composable
 fun NotePagePreviw(){
+    //SHIIIITTTTT
     var content = Content()
     var list: MutableList<ContentItem> = mutableListOf()
     list.add(ItemText("Some shitted Text"))
