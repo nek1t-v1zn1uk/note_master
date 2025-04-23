@@ -1,6 +1,7 @@
 package com.example.notemaster
 
 import android.R
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -72,15 +73,25 @@ class MainActivity : ComponentActivity() {
 fun MyApp() {
     Log.d("NavArgs", "NotePage opened")
 
-    var cont = Content()
-    cont.addComponent(0, ItemText("Sheesh\nWeed\nCoke"))
+    var cont1 = Content()
+    cont1.addComponent(0, ItemText("Sheesh\nWeed"))
+    cont1.addComponent(1, ItemImage(Uri.parse("content://com.example.notemaster.fileprovider/camera_images/IMG_1745263475600.jpg")))
+    cont1.addComponent(2, ItemText("Coke"))
+    var cont2 = Content()
+    cont2.addComponent(0, ItemText("Sheesh\nWeed\nCoke"))
+    var cont3 = Content()
+    cont3.addComponent(0, ItemText("Sheesh\nWeed\nCoke"))
+    var cont4 = Content()
+    cont4.addComponent(0, ItemText("Sheesh\nWeed\nCoke"))
+    var cont5 = Content()
+    cont5.addComponent(0, ItemText("Sheesh\nWeed\nCoke"))
 
     val list by remember { mutableStateOf(arrayOf<Note>(
-        Note("Лабораторні", cont),
-        Note("Курсовий проект", cont),
-        Note("Днюхи", cont),
-        Note("Велосипед", cont),
-        Note("Закупки", cont),
+        Note("Лабораторні", cont1),
+        Note("Курсовий проект", cont2),
+        Note("Днюхи", cont3),
+        Note("Велосипед", cont4),
+        Note("Закупки", cont5),
         Note("Закупки"),
         Note("Закупки"),
         Note("Закупки"),

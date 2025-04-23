@@ -1,7 +1,11 @@
 package com.example.notemaster
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.MediaStore
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -63,6 +67,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
@@ -73,10 +78,13 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.text.trimmedLength
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import coil.compose.rememberAsyncImagePainter
+import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -153,6 +161,7 @@ fun NotePage(note: Note, navController: NavController){
         isKeyboard = false
     }
 
+    //start of gallery-picker
     var imageUri = remember { mutableStateOf<Uri?>(null) }
     val waitingForImage = remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(
@@ -208,6 +217,119 @@ fun NotePage(note: Note, navController: NavController){
             }
         }
     }
+    //end gallery-picker
+
+    //start of camera
+    val context = LocalContext.current
+    var photoUri by remember { mutableStateOf<Uri?>(null) }
+    var cameraImagePath by remember { mutableStateOf<Uri?>(null) }
+    var waitingForCameraPhoto by remember { mutableStateOf(false) }
+
+    // Generate fresh file + URI
+    lateinit var photoFile: File // ← declared at composable level or higher
+
+    fun createCameraImageUri(): Uri {
+        photoFile = File(context.cacheDir, "IMG_${System.currentTimeMillis()}.jpg")
+        if (!photoFile.exists()) photoFile.createNewFile()
+        return FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            photoFile
+        )
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+        onResult = { success ->
+            Log.d("CameraResult", "Camera returned success: $success, URI: $cameraImagePath")
+            if (success && cameraImagePath != null) {
+                photoUri = cameraImagePath
+                waitingForCameraPhoto = false
+            }
+        }
+    )
+
+    fun openCamera() {
+        val uri = createCameraImageUri()
+        cameraImagePath = uri
+        waitingForCameraPhoto = true
+
+        // Grant permission to all camera apps
+        val resInfoList = context.packageManager.queryIntentActivities(
+            Intent(MediaStore.ACTION_IMAGE_CAPTURE),
+            PackageManager.MATCH_DEFAULT_ONLY
+        )
+        for (resolveInfo in resInfoList) {
+            val packageName = resolveInfo.activityInfo.packageName
+            context.grantUriPermission(
+                packageName,
+                uri,
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+
+        Log.d("Shit", "File exists: ${photoFile.exists()}, path: ${photoFile.absolutePath}")
+        Log.d("Shit", "Launching camera with uri: $uri")
+
+        cameraLauncher.launch(uri)
+    }
+
+    // Handle after camera photo is taken
+    LaunchedEffect(photoUri) {
+        photoUri?.let { uri ->
+            val file = File(uri.path ?: "")
+            Log.d("PhotoUri", "Handling photo: $uri, file exists: ${file.exists()}")
+
+            try {
+                val newImageItem = ItemImage(uri)
+                Log.d("MyData", "camera uri:${uri}")
+                val item = note.content.list[FocusedItem.indexInList]
+
+                if (item is ItemText) {
+                    var indexInListOfNewImage = -1
+
+                    if (FocusedItem.indexInItem == 0) {
+                        indexInListOfNewImage = 0
+                    } else if (FocusedItem.indexInItem == item.text.length) {
+                        indexInListOfNewImage = FocusedItem.indexInList + 1
+                        if (FocusedItem.indexInList == note.content.list.size - 1) {
+                            note.content.addComponent(
+                                FocusedItem.indexInList + 1,
+                                ItemText("", style = item.style)
+                            )
+                        }
+                    } else {
+                        indexInListOfNewImage = FocusedItem.indexInList + 1
+                        val firstText = item.text.substring(0, FocusedItem.indexInItem)
+                        val secondText = item.text.substring(FocusedItem.indexInItem)
+                        item.text = firstText
+                        note.content.addComponent(
+                            FocusedItem.indexInList + 1,
+                            ItemText(secondText, style = item.style)
+                        )
+                        FocusedItem.updateValue(firstText)
+                    }
+
+                    note.content.addComponent(indexInListOfNewImage, newImageItem)
+                }
+
+                photoUri = null
+            } catch (e: Exception) {
+                Log.e("CrashHandler", "Error while inserting image: ${e.message}", e)
+            }
+        }
+    }
+
+
+    //for permisssions
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { granted ->
+            if (granted) openCamera()
+            // else: Show a dialog or snack
+        }
+    )
+    //end of camera
 
     Scaffold(
         containerColor = Color.White,
@@ -242,6 +364,7 @@ fun NotePage(note: Note, navController: NavController){
                         .height(56.dp)
                 ) {
                     Row {
+                        //gallery
                         IconButton(
                             onClick = {
                                 openGallery()
@@ -256,6 +379,7 @@ fun NotePage(note: Note, navController: NavController){
                                     .size(36.dp)
                             )
                         }
+                        //drawing
                         IconButton(
                             onClick = {},
                             modifier = Modifier
@@ -268,6 +392,7 @@ fun NotePage(note: Note, navController: NavController){
                                     .size(36.dp)
                             )
                         }
+                        //checkbox
                         IconButton(
                             onClick = {
                                 val item = note.content.list.get(FocusedItem.indexInList)
@@ -322,8 +447,15 @@ fun NotePage(note: Note, navController: NavController){
                                     .size(36.dp)
                             )
                         }
+                        //highlight(temporary camera)
                         IconButton(
-                            onClick = {},
+                            onClick = {
+                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                                    openCamera()
+                                } else {
+                                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                }
+                            },
                             modifier = Modifier
                                 .weight(1f)
                         ) {
@@ -334,6 +466,7 @@ fun NotePage(note: Note, navController: NavController){
                                     .size(36.dp)
                             )
                         }
+                        //bigger text
                         IconButton(
                             onClick = {},
                             modifier = Modifier
@@ -347,6 +480,7 @@ fun NotePage(note: Note, navController: NavController){
                                     .size(36.dp)
                             )
                         }
+                        //smaller text
                         IconButton(
                             onClick = {},
                             modifier = Modifier
@@ -361,6 +495,7 @@ fun NotePage(note: Note, navController: NavController){
                                     .size(36.dp)
                             )
                         }
+                        //bold text
                         IconButton(
                             onClick = {},
                             modifier = Modifier
@@ -467,12 +602,11 @@ fun NoteContent(
         val content: MutableList<ContentItem> = note.content.list
 
         val remainingHeight = with(density) { lazyColumnHeightPx.toDp() }
-        Log.d("Shit", "123")
+
         items(
             count = content.size,
             key = { content[it].id } // 👈 This ensures Compose tracks each item correctly
         ) { index ->
-            Log.d("Shit", "123")
             val focusRequester = remember { FocusRequester() }
             var modifierPart: Modifier = Modifier
             val item = content[index]
