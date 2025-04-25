@@ -33,10 +33,13 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.FormatBold
@@ -97,6 +100,7 @@ import java.util.Locale
 import kotlin.math.atan
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.tooling.preview.Wallpapers
 import androidx.navigation.compose.currentBackStackEntryAsState
 
 
@@ -407,7 +411,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
         containerColor = Color.White,
         //contentWindowInsets = WindowInsets(0),
         // contentWindowInsets: only status+nav bars
-        contentWindowInsets   = WindowInsets.statusBars.union(WindowInsets.navigationBars),
+        contentWindowInsets = WindowInsets.statusBars.union(WindowInsets.navigationBars),
         // push *only* the bottomBar by the IME height
         modifier = Modifier
             //.navigationBarsPadding()
@@ -434,6 +438,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                     ) {
                         Icon (
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            tint = Color.Black,
                             contentDescription = null
                         )
                     }
@@ -443,159 +448,206 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
         bottomBar = {
             if(isKeyboard)
                 BottomAppBar(
+                    containerColor = Color.White,
+                    contentColor = Color.White,
                     modifier = Modifier
                         .windowInsetsPadding(WindowInsets.ime)
                         .height(56.dp)
                 ) {
-                    Row {
-                        //gallery
-                        IconButton(
-                            onClick = {
-                                openGallery()
-                            },
+                    Column() {
+                        Box(
                             modifier = Modifier
-                                .weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Image,
-                                contentDescription = null,
+                                .height(2.dp)
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp)
+                                .background(Color.Gray, RoundedCornerShape(2.dp))
+                        )
+                        Row {
+                            //gallery
+                            IconButton(
+                                onClick = {
+                                    openGallery()
+                                },
                                 modifier = Modifier
-                                    .size(36.dp)
-                            )
-                        }
-                        //drawing
-                        IconButton(
-                            onClick = {
-                                navController.navigate("drawing")
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Draw,
-                                contentDescription = null,
+                                    .weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Image,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                )
+                            }
+                            //drawing
+                            IconButton(
+                                onClick = {
+                                    navController.navigate("drawing")
+                                },
                                 modifier = Modifier
-                                    .size(36.dp)
-                            )
-                        }
-                        //checkbox
-                        IconButton(
-                            onClick = {
-                                val item = note.content.list.get(FocusedItem.indexInList)
-                                if(item is ItemText) {
-
-                                    var firstText = ""
-                                    var checkBoxText = ""
-                                    var lastText = ""
-
-                                    var i = FocusedItem.indexInItem
-                                    var indexBefore = i - 1
-                                    var indexAfter = i
-                                    while(indexBefore != 0 && item.text[indexBefore] != '\n'){
-                                        indexBefore--
+                                    .weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Draw,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                )
+                            }
+                            //camera
+                            IconButton(
+                                onClick = {
+                                    if (ContextCompat.checkSelfPermission(
+                                            context,
+                                            Manifest.permission.CAMERA
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        openCamera()
+                                    } else {
+                                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                                     }
-                                    while(indexAfter != item.text.length && item.text[indexAfter] != '\n'){
-                                        indexAfter++
-                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CameraAlt,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                )
+                            }
+                            //checkbox
+                            IconButton(
+                                onClick = {
+                                    val item = note.content.list.get(FocusedItem.indexInList)
+                                    if (item is ItemText) {
+
+                                        var firstText = ""
+                                        var checkBoxText = ""
+                                        var lastText = ""
+
+                                        var i = FocusedItem.indexInItem
+                                        var indexBefore = i - 1
+                                        var indexAfter = i
+                                        while (indexBefore != 0 && item.text[indexBefore] != '\n') {
+                                            indexBefore--
+                                        }
+                                        while (indexAfter != item.text.length && item.text[indexAfter] != '\n') {
+                                            indexAfter++
+                                        }
 
 
-                                    lastText = item.text.substring(indexAfter, item.text.length)
-                                    checkBoxText = item.text.substring(indexBefore + 1, indexAfter)
-                                    if(indexBefore != 0)
-                                        firstText = item.text.substring(0, indexBefore)
+                                        lastText = item.text.substring(indexAfter, item.text.length)
+                                        checkBoxText =
+                                            item.text.substring(indexBefore + 1, indexAfter)
+                                        if (indexBefore != 0)
+                                            firstText = item.text.substring(0, indexBefore)
 
-                                    val tempIndexInList = FocusedItem.indexInList
-                                    FocusedItem.changeNeeded = true
-                                    FocusedItem.indexInList += 1
-                                    FocusedItem.cursorStart = FocusedItem.indexInItem - firstText.length
+                                        val tempIndexInList = FocusedItem.indexInList
+                                        FocusedItem.changeNeeded = true
+                                        FocusedItem.indexInList += 1
+                                        FocusedItem.cursorStart =
+                                            FocusedItem.indexInItem - firstText.length
 
-                                    note.content.addComponent(
-                                        tempIndexInList,
-                                        ItemCheckBox(checkBoxText)//, style = item.style)
-                                    )
-                                    if(indexBefore != 0)
                                         note.content.addComponent(
                                             tempIndexInList,
-                                            ItemText(firstText)//, style = item.style)
+                                            ItemCheckBox(checkBoxText)//, style = item.style)
                                         )
+                                        if (indexBefore != 0)
+                                            note.content.addComponent(
+                                                tempIndexInList,
+                                                ItemText(firstText)//, style = item.style)
+                                            )
 
-                                    item.text = lastText
-                                    FocusedItem.updateValue(firstText)
+                                        item.text = lastText
+                                        FocusedItem.updateValue(firstText)
 
-                                }
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckBox,
-                                contentDescription = null,
+                                    }
+                                },
                                 modifier = Modifier
-                                    .size(36.dp)
-                            )
-                        }
-                        //highlight(temporary camera)
-                        IconButton(
-                            onClick = {
-                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                                    openCamera()
-                                } else {
-                                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                                }
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.stylus_highlighter),
-                                contentDescription = null,
+                                    .weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckBox,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                )
+                            }
+                            //highlight(temporary camera)
+                            /*IconButton(
+                                onClick = {
+                                    if (ContextCompat.checkSelfPermission(
+                                            context,
+                                            Manifest.permission.CAMERA
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        openCamera()
+                                    } else {
+                                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                    }
+                                },
                                 modifier = Modifier
-                                    .size(36.dp)
-                            )
-                        }
-                        //bigger text
-                        IconButton(
-                            onClick = {},
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(start = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.TextIncrease,
-                                contentDescription = null,
+                                    .weight(1f)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.stylus_highlighter),
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                )
+                            }*/
+                            //bigger text
+                            /*IconButton(
+                                onClick = {},
                                 modifier = Modifier
-                                    .size(36.dp)
-                            )
-                        }
-                        //smaller text
-                        IconButton(
-                            onClick = {},
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(start = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.TextDecrease,
-                                contentDescription = null,
-                                tint = Color.LightGray,
+                                    .weight(1f)
+                                    .padding(start = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.TextIncrease,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                )
+                            }
+                            //smaller text
+                            IconButton(
+                                onClick = {},
                                 modifier = Modifier
-                                    .size(36.dp)
-                            )
-                        }
-                        //bold text
-                        IconButton(
-                            onClick = {},
-                            modifier = Modifier
-                                .weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FormatBold,
-                                contentDescription = null,
+                                    .weight(1f)
+                                    .padding(start = 8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.TextDecrease,
+                                    contentDescription = null,
+                                    tint = Color.LightGray,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                )
+                            }
+                            //bold text
+                            IconButton(
+                                onClick = {},
                                 modifier = Modifier
-                                    .size(36.dp)
-                            )
+                                    .weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FormatBold,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                )
+                            }
+                            */
                         }
-
                     }
                 }
         }
@@ -798,7 +850,7 @@ fun NoteContentTop(note: Note, modifier: Modifier = Modifier){
             },
             placeholder = { Text("Назва", fontSize = 24.sp) },
             singleLine = true,
-            textStyle = TextStyle(fontSize = 24.sp),
+            textStyle = TextStyle(fontSize = 24.sp, color = Color.Black),
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.White,
                 unfocusedContainerColor = Color.White,
@@ -873,9 +925,25 @@ fun TextPart(
             }
             */
         },
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = Color.White,
+            unfocusedContainerColor = Color.White,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            focusedPlaceholderColor = Color.LightGray,
+            unfocusedPlaceholderColor = Color.LightGray,
+            cursorColor = Color(red = 100, green = 100, blue = 255),
+            selectionColors = TextSelectionColors(
+                handleColor = Color(red = 100, green = 100, blue = 255),
+                backgroundColor = Color(red = 100, green = 100, blue = 255, alpha = 100),
+            ),
+            disabledIndicatorColor = Color(red = 100, green = 100, blue = 255),
+            errorIndicatorColor = Color(red = 100, green = 100, blue = 255),
+
+        ),
         singleLine = false,
         maxLines = Int.MAX_VALUE,
-        textStyle = TextStyle(fontSize = 18.sp),
+        textStyle = TextStyle(fontSize = 18.sp, color = Color.Black),
         modifier = modifier
             .focusRequester(focusRequester)
             .focusable()
@@ -934,7 +1002,7 @@ fun CheckBoxPart(
 
 
 
-@Preview(wallpaper = androidx.compose.ui.tooling.preview.Wallpapers.NONE)
+@Preview(wallpaper = Wallpapers.NONE)
 @Composable
 fun NotePagePreviw(){
     //SHIIIITTTTT

@@ -179,6 +179,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                             Icon(
                                 imageVector = Icons.Default.DeleteOutline,
                                 contentDescription = null,
+                                tint = Color.Black,
                                 modifier = Modifier
                                     .size(height = 40.dp, width = 60.dp)
                                     .padding(end = 20.dp)
@@ -200,6 +201,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = null,
+                                tint = Color.Black,
                                 modifier = Modifier
                                     .size(height = 40.dp, width = 60.dp)
                                     .padding(end = 20.dp)
@@ -295,6 +297,8 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
         },
         floatingActionButton = {
             FloatingActionButton(
+                containerColor = Color(red = 100, green = 100, blue = 255),
+                contentColor = Color.Black,
                 onClick = {
                     var newNote = Note()
                     newNote.content.ensureTrailingText()
@@ -413,7 +417,8 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                     ){
                         Text(
                             text = item.name,
-                            fontSize = 18.sp
+                            fontSize = 18.sp,
+                            color = Color.Black
                         )
 
                         Text(
