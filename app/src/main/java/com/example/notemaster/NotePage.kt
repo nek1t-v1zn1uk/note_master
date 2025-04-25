@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -93,6 +95,10 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.atan
+import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
+import androidx.navigation.compose.currentBackStackEntryAsState
+
 
 @Composable
 fun OnKeyboardStartHiding(onStartHiding: () -> Unit) {
@@ -368,12 +374,47 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
     )
     //end of camera
 
+    //start of drawing
+    // 1) Get the current NavBackStackEntry as Compose State
+    val backStackEntry by navController.currentBackStackEntryAsState()
+
+    // 2) Create a StateFlow<String?> from SavedStateHandle["drawingPath"]
+    val drawingPathFlow = backStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow<String?>("drawingPath", null)
+
+    // 3) Collect it into Compose State
+    val drawingPath by (drawingPathFlow?.collectAsState() ?: remember { mutableStateOf<String?>(null) })
+
+    // 4) When a new path arrives, inject your ItemImage and clear the key
+    LaunchedEffect(drawingPath) {
+        drawingPath?.let { path ->
+            val uri = Uri.fromFile(File(path))
+            // append right after the focused item (or wherever you’d like)
+            note.content.addComponent(
+                index = FocusedItem.indexInList + 1,
+                item = ItemImage(uri)
+            )
+            // remove so it doesn’t fire again
+            backStackEntry
+                ?.savedStateHandle
+                ?.remove<String>("drawingPath")
+        }
+    }
+    //end of drawing
+
     Scaffold(
         containerColor = Color.White,
+        //contentWindowInsets = WindowInsets(0),
+        // contentWindowInsets: only status+nav bars
+        contentWindowInsets   = WindowInsets.statusBars.union(WindowInsets.navigationBars),
+        // push *only* the bottomBar by the IME height
         modifier = Modifier
-            .navigationBarsPadding()
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .windowInsetsPadding(WindowInsets.ime),
+            //.navigationBarsPadding()
+            //.imePadding()
+            //.windowInsetsPadding(WindowInsets.navigationBars)
+            //.windowInsetsPadding(WindowInsets.ime)
+                ,
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -403,6 +444,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
             if(isKeyboard)
                 BottomAppBar(
                     modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.ime)
                         .height(56.dp)
                 ) {
                     Row {
@@ -423,7 +465,9 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                         }
                         //drawing
                         IconButton(
-                            onClick = {},
+                            onClick = {
+                                navController.navigate("drawing")
+                            },
                             modifier = Modifier
                                 .weight(1f)
                         ) {
@@ -559,8 +603,8 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
         innerPadding ->
 
         NoteContent(note,
-            Modifier.padding(innerPadding)
-                .consumeWindowInsets(innerPadding)
+            Modifier
+                .padding(innerPadding)
         )
     } /* { innerPadding ->
         Column(

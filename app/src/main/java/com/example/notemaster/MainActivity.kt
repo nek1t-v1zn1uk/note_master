@@ -133,6 +133,9 @@ fun MyApp() {
             val noteId = backStackEntry.arguments?.getInt("noteId")!!
             NotePage(noteDao, noteId, navController)
         }
+        composable("drawing") {
+            DrawingPage(navController)
+        }
         composable("profile") { HomeScreen(navController) }
     }
 }
