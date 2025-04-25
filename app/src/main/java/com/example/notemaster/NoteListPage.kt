@@ -94,9 +94,14 @@ import kotlinx.coroutines.launch
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.runtime.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.withContext
+
 
 @Composable
 fun HandleBackPress(
@@ -129,10 +134,21 @@ fun HandleBackPress(
     }
 }
 
+var chosenItems: MutableList<Int> = mutableStateListOf()
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NoteList(list: Array<Note>, navController: NavController){
+fun NoteList(navController: NavController, noteDao: NoteDao){
+
+    val list = remember { mutableStateListOf<Note>() }
+
+    LaunchedEffect(Unit) {
+        val entities = noteDao.getAllNotesOnce()
+        list.clear()
+        list.addAll(entities.map { it.toNote() })
+        Log.d("Shit", "Count:${list.size}")
+    }
 
     var isCheckState by remember { mutableStateOf(false) }
 
@@ -160,6 +176,27 @@ fun NoteList(list: Array<Note>, navController: NavController){
                     ),
                     actions = {
                         if(isCheckState) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(height = 40.dp, width = 60.dp)
+                                    .padding(end = 20.dp)
+                                    .clickable(onClick = {
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            for(id in chosenItems)
+                                                noteDao.deleteNoteById(id)
+
+                                            val updatedNotes = noteDao.getAllNotesOnce()
+                                            withContext(Dispatchers.Main) {
+                                                list.clear()
+                                                list.addAll(updatedNotes.map { it.toNote() })
+                                            }
+                                        }
+                                        isCheckState = false
+
+                                    })
+                            )
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = null,
@@ -255,7 +292,30 @@ fun NoteList(list: Array<Note>, navController: NavController){
                     }
                 }
             }
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = {
+                    var newNote = Note()
+                    newNote.content.ensureTrailingText()
+                    list.add(newNote)
+                    CoroutineScope(Dispatchers.IO).launch {
+                        noteDao.insert(newNote.toEntity())
+
+                        // Refresh from DB
+                        val entities = noteDao.getAllNotesOnce()
+                        withContext(Dispatchers.Main) {
+                            list.clear()
+                            list.addAll(entities.map { it.toNote() })
+                        }
+                    }
+
+                }
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add")
+            }
         }
+
     ){ innerPadding ->
 
         val scrollState = rememberScrollState()
@@ -326,9 +386,16 @@ fun NoteList(list: Array<Note>, navController: NavController){
                                             longPressJob.cancel()
                                             if(isCheckState) {
                                                 isChecked = !isChecked
+                                                if(isChecked){
+                                                    chosenItems.add(item.id)
+                                                }
+                                                else{
+                                                    chosenItems.remove(item.id)
+                                                }
                                             } else{
                                                 Log.d("NavArgs", "index: ${list.indexOf(item)}")
-                                                navController.navigate("note_page/${list.indexOf(item)}")
+                                                // use the actual primary key, not the list position
+                                                navController.navigate("note_page/${item.id}")
                                             }
                                         }
 
@@ -397,18 +464,18 @@ fun NoteList(list: Array<Note>, navController: NavController){
 @Composable
 fun NoteListPreview(){
     val list = arrayOf<Note>(
-        Note("Лабораторні"),
-        Note("Курсовий проект"),
-        Note("Днюхи"),
-        Note("Велосипед"),
-        Note("Закупки"),
-        Note("Закупки"),
-        Note("Закупки"),
-        Note("Закупки"),
-        Note("Закупки"),
-        Note("Закупки")
+        Note(0, "Лабораторні"),
+        Note(0, "Курсовий проект"),
+        Note(0, "Днюхи"),
+        Note(0, "Велосипед"),
+        Note(0, "Закупки"),
+        Note(0, "Закупки"),
+        Note(0, "Закупки"),
+        Note(0, "Закупки"),
+        Note(0, "Закупки"),
+        Note(0, "Закупки")
     )
     NoteMasterTheme{
-        NoteList(list, rememberNavController())
+        //NoteList(list, rememberNavController(), null)
     }
 }

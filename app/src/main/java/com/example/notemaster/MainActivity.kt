@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,6 +42,7 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.Wallpapers
@@ -53,6 +55,10 @@ import com.example.notemaster.ui.theme.NoteMasterTheme
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.room.Room
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 
 class MainActivity : ComponentActivity() {
@@ -71,6 +77,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MyApp() {
+    /*
     Log.d("NavArgs", "NotePage opened")
 
     var cont1 = Content()
@@ -99,19 +106,32 @@ fun MyApp() {
         Note("Закупки")
     )
     )}
+    */
+
+    val context = LocalContext.current
+
+    val db = remember {
+        Room.databaseBuilder(
+            context,
+            AppDatabase::class.java,
+            "notes_database"
+        )
+            .fallbackToDestructiveMigration()
+            .build()
+    }
+    val noteDao = db.noteDao()
+
 
     val navController = rememberNavController()
+
     NavHost(navController = navController, startDestination = "home") {
-        composable("home") { NoteList(list, navController) }
+        composable("home") { NoteList(navController, noteDao) }
         composable(
             route = "note_page/{noteId}",
             arguments = listOf(navArgument("noteId") { type = NavType.IntType })
         ) { backStackEntry ->
-            Log.d("NavArgs", "list size: ${list.size}")
             val noteId = backStackEntry.arguments?.getInt("noteId")!!
-            Log.d("NavArgs", "Received noteId: $noteId, list size: ${list.size}")
-
-            NotePage(list[noteId], navController)
+            NotePage(noteDao, noteId, navController)
         }
         composable("profile") { HomeScreen(navController) }
     }

@@ -84,6 +84,10 @@ import androidx.core.text.trimmedLength
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import coil.compose.rememberAsyncImagePainter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -149,7 +153,25 @@ class FocusedItem {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotePage(note: Note, navController: NavController){
+fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
+
+    var note: Note by remember { mutableStateOf(Note()) }
+
+    LaunchedEffect(noteId) {
+        val noteEntity = noteDao.getNoteById(noteId)
+        note = noteEntity?.toNote() ?: Note()
+
+        // 1) look at the IDs you *just* deserialized
+        val maxLoaded = note.content.list.maxOfOrNull { it.id } ?: 0
+
+        // 2) bump our generator so new items start *after* them
+        ContentItem.resetLastId(maxLoaded)
+
+        // 3) add trailing text if needed (and it will get a fresh ID!)
+        note.content.ensureTrailingText()
+        //Log.d("Shit", "textLaunched:${(note.content.list[0] as ItemText).text}; nodeId:${noteId}")
+    }
+    note.content.ensureTrailingText()
     var isKeyboard by remember { mutableStateOf(false) }
 
     val focusManager = LocalFocusManager.current
@@ -159,22 +181,34 @@ fun NotePage(note: Note, navController: NavController){
     OnKeyboardStartHiding {
         focusManager.clearFocus() // removes focus from TextField
         isKeyboard = false
+
+        CoroutineScope(Dispatchers.IO).launch {
+            noteDao.update(note.toEntity()) // 2. Update in DB
+            //Log.d("Shit", "text:${(note.content.list[0] as ItemText).text}; nodeId:${noteId}")
+        }
     }
 
     //start of gallery-picker
     var imageUri = remember { mutableStateOf<Uri?>(null) }
     val waitingForImage = remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
+        contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri ->
-            imageUri.value = null
-            imageUri.value = uri
-            waitingForImage.value = false // Done waiting
+            if (uri != null) {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                imageUri.value = null
+                imageUri.value = uri
+                waitingForImage.value = false
+            }
         }
     )
     fun openGallery() {
         waitingForImage.value = true
-        launcher.launch("image/*")
+        launcher.launch(arrayOf("image/*"))
     }
     //starts when image is pressed
     LaunchedEffect(imageUri.value) {
@@ -193,7 +227,7 @@ fun NotePage(note: Note, navController: NavController){
                     if (FocusedItem.indexInList == note.content.list.size - 1)
                         note.content.addComponent(
                             FocusedItem.indexInList + 1,
-                            ItemText("", style = item.style)
+                            ItemText("")//, style = item.style)
                         )
                 } else {
                     indexInListOfNewImage = FocusedItem.indexInList + 1
@@ -204,7 +238,7 @@ fun NotePage(note: Note, navController: NavController){
                     item.text = firstText
                     note.content.addComponent(
                         FocusedItem.indexInList + 1,
-                        ItemText(secondText, style = item.style)
+                        ItemText(secondText)//, style = item.style)
                     )
                     FocusedItem.updateValue(firstText)
                 }
@@ -214,13 +248,14 @@ fun NotePage(note: Note, navController: NavController){
                     newImageItem
                 )
                 imageUri.value = null
+
+                note.lastEdit = LocalDateTime.now()
             }
         }
     }
     //end gallery-picker
 
     //start of camera
-    val context = LocalContext.current
     var photoUri by remember { mutableStateOf<Uri?>(null) }
     var cameraImagePath by remember { mutableStateOf<Uri?>(null) }
     var waitingForCameraPhoto by remember { mutableStateOf(false) }
@@ -295,7 +330,7 @@ fun NotePage(note: Note, navController: NavController){
                         if (FocusedItem.indexInList == note.content.list.size - 1) {
                             note.content.addComponent(
                                 FocusedItem.indexInList + 1,
-                                ItemText("", style = item.style)
+                                ItemText("")//, style = item.style)
                             )
                         }
                     } else {
@@ -305,7 +340,7 @@ fun NotePage(note: Note, navController: NavController){
                         item.text = firstText
                         note.content.addComponent(
                             FocusedItem.indexInList + 1,
-                            ItemText(secondText, style = item.style)
+                            ItemText(secondText)//, style = item.style)
                         )
                         FocusedItem.updateValue(firstText)
                     }
@@ -314,6 +349,8 @@ fun NotePage(note: Note, navController: NavController){
                 }
 
                 photoUri = null
+
+                note.lastEdit = LocalDateTime.now()
             } catch (e: Exception) {
                 Log.e("CrashHandler", "Error while inserting image: ${e.message}", e)
             }
@@ -346,7 +383,12 @@ fun NotePage(note: Note, navController: NavController){
                 navigationIcon = {
                     IconButton(
                         onClick = {
-                            navController.popBackStack()
+                            CoroutineScope(Dispatchers.IO).launch {
+                                noteDao.update(note.toEntity())
+                                withContext(Dispatchers.Main) {
+                                    navController.popBackStack()
+                                }
+                            }
                         }
                     ) {
                         Icon (
@@ -425,16 +467,17 @@ fun NotePage(note: Note, navController: NavController){
 
                                     note.content.addComponent(
                                         tempIndexInList,
-                                        ItemCheckBox(checkBoxText, style = item.style)
+                                        ItemCheckBox(checkBoxText)//, style = item.style)
                                     )
                                     if(indexBefore != 0)
                                         note.content.addComponent(
                                             tempIndexInList,
-                                            ItemText(firstText, style = item.style)
+                                            ItemText(firstText)//, style = item.style)
                                         )
 
                                     item.text = lastText
                                     FocusedItem.updateValue(firstText)
+
                                 }
                             },
                             modifier = Modifier
@@ -592,13 +635,15 @@ fun NoteContent(
             }
     ) {
         item {
-            NoteContentTop(note.name, note.lastEdit, note.content.getSymbolsCount(),
-                    modifier = Modifier.onGloballyPositioned { coords ->
-                        lazyColumnHeightPx -= coords.size.height
-                    }
-                        .padding(bottom = 16.dp)
+            NoteContentTop(
+                note,
+                modifier = Modifier.onGloballyPositioned { coords ->
+                    lazyColumnHeightPx -= coords.size.height
+                }
+                    .padding(bottom = 16.dp)
             )
         }
+        note.content.ensureTrailingText()
         val content: MutableList<ContentItem> = note.content.list
 
         val remainingHeight = with(density) { lazyColumnHeightPx.toDp() }
@@ -625,8 +670,10 @@ fun NoteContent(
                     if (index == content.lastIndex) {
                         modifierPart = modifierPart.heightIn(min = remainingHeight)
                     }
+                    Log.d("Shit", "Before:${item.text}")
                     TextPart(
-                        item.text,
+                        note,
+                        item,
                         index,
                         focusRequester,
                         modifierPart.fillMaxSize()
@@ -689,17 +736,22 @@ fun NoteContent(
 }
 
 @Composable
-fun NoteContentTop(name: String, date: LocalDateTime, symbolCount: Int, modifier: Modifier = Modifier){
+fun NoteContentTop(note: Note, modifier: Modifier = Modifier){
 
-    var nameValue = name
-    var dateValue = date
+    var nameValue = note.name //by remember { mutableStateOf(note.name) }
+    var dateValue = note.lastEdit //by remember { mutableStateOf(note.lastEdit) }
+    var symbolCount = note.content.getSymbolsCount() //by remember { mutableStateOf(note.content.getSymbolsCount()) }
 
     Column(
         modifier = modifier
     ) {
         TextField(
             value = nameValue,
-            onValueChange = { nameValue = it },
+            onValueChange = {
+                nameValue = it
+                note.name = nameValue
+                note.lastEdit = LocalDateTime.now()
+            },
             placeholder = { Text("Назва", fontSize = 24.sp) },
             singleLine = true,
             textStyle = TextStyle(fontSize = 24.sp),
@@ -734,24 +786,34 @@ fun NoteContentTop(name: String, date: LocalDateTime, symbolCount: Int, modifier
 
 @Composable
 fun TextPart(
-    value: String,
+    note: Note,
+    item: ItemText,
     indexInList: Int,
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier){
-    var textFieldValue by remember { mutableStateOf(TextFieldValue(value)) }
 
-    LaunchedEffect(Unit) {
+    var textFieldValue by remember { mutableStateOf(TextFieldValue(item.text)) }
+
+    LaunchedEffect(item.text) {
         if (indexInList == FocusedItem.indexInList && FocusedItem.changeNeeded) {
             Log.d("Shit", "TB - indexInList:${indexInList}; ")
             focusRequester.requestFocus()
             textFieldValue = textFieldValue.copy(selection = TextRange(FocusedItem.cursorStart))
             FocusedItem.changeNeeded = false
         }
+        textFieldValue = textFieldValue.copy(text = item.text)
+        Log.d("Shit", "textFieldValue:${textFieldValue.text}; ")
     }
+
     TextField(
         value = textFieldValue,
         onValueChange = { newValue ->
+
+            if(textFieldValue.text != newValue.text)
+                note.lastEdit = LocalDateTime.now()
+
             textFieldValue = newValue
+            item.text = textFieldValue.text
 
             FocusedItem.indexInList = indexInList
             FocusedItem.indexInItem = newValue.selection.start
@@ -832,12 +894,12 @@ fun CheckBoxPart(
 @Composable
 fun NotePagePreviw(){
     //SHIIIITTTTT
-    var content = Content()
+    /*var content = Content()
     var list: MutableList<ContentItem> = mutableListOf()
     list.add(ItemText("Some shitted Text"))
     list.add(ItemCheckBox("Choose it"))
     list.add(ItemText("Another shitted Text\nSHEESH\nFuck you"))
     content.list = list
-    val note = Note("Name", content)
-    NotePage(note, rememberNavController())
+    val note = Note(0, "Name", content)
+    NotePage(0, null, rememberNavController())*/
 }
