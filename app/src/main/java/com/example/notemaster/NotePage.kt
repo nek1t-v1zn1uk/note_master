@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -153,7 +154,7 @@ fun OnKeyboardStartShowing(onStartShowing: () -> Unit) {
 
 class FocusedItem {
     companion object {
-        var indexInList: Int = -1
+        var indexInList: Int = 0
         var indexInItem: Int = 0
         var updateValue: (String) -> Unit = {}
         var changeNeeded: Boolean = false
@@ -225,14 +226,16 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
         imageUri.value?.let { uri ->
             // This block is only triggered after image is selected!
             val newImageItem = ItemImage(uri)
-
+            Log.d("Pictures", "Size:${note.content.list.size}\nFocusedItem.indexInList: ${FocusedItem.indexInList}")
             var item = note.content.list[FocusedItem.indexInList]
             if(item is ItemText) {
                 var indexInListOfNewImage = -1
 
                 if (FocusedItem.indexInItem == 0) {
+                    Log.d("Pictures", "State: 1")
                     indexInListOfNewImage = 0
                 } else if (FocusedItem.indexInItem == item.text.length) {
+                    Log.d("Pictures", "State: 2")
                     indexInListOfNewImage = FocusedItem.indexInList + 1
                     if (FocusedItem.indexInList == note.content.list.size - 1)
                         note.content.addComponent(
@@ -240,6 +243,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                             ItemText("")//, style = item.style)
                         )
                 } else {
+                    Log.d("Pictures", "State: 3")
                     indexInListOfNewImage = FocusedItem.indexInList + 1
                     var firstText = item.text.substring(0, FocusedItem.indexInItem)
                     var secondText =
@@ -252,7 +256,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                     )
                     FocusedItem.updateValue(firstText)
                 }
-
+                Log.d("Pictures", "indexInListOfNewImage:${indexInListOfNewImage}")
                 note.content.addComponent(
                     indexInListOfNewImage,
                     newImageItem
@@ -782,10 +786,11 @@ fun NoteContent(
                 }
 
                 is ItemImage -> {
-                    Image(
-                        painter = rememberAsyncImagePainter(item.uri),
-                        contentDescription = null,
-                        modifier = Modifier.size(200.dp)
+                    ImagePart(
+                        note = note,
+                        item = item,
+                        indexInList = index,
+                        modifier = Modifier
                             .onGloballyPositioned { coords ->
                                 lazyColumnHeightPx -= coords.size.height
                             }
@@ -1007,7 +1012,21 @@ fun CheckBoxPart(
     }
 }
 
-
+@Composable
+fun ImagePart(
+    note: Note,
+    item: ItemImage,
+    indexInList: Int,
+    modifier: Modifier = Modifier
+){
+    Image(
+        painter = rememberAsyncImagePainter(item.uri),
+        contentDescription = null,
+        modifier = modifier
+            .size(200.dp)
+            .border(2.dp, Color.Black, RoundedCornerShape(10.dp))
+    )
+}
 
 
 @Preview(wallpaper = Wallpapers.NONE)
