@@ -742,7 +742,6 @@ fun NoteContent(
         note.content.ensureTrailingText()
         val content: MutableList<ContentItem> = note.content.list
 
-        val remainingHeight = with(density) { lazyColumnHeightPx.toDp() }
 
         items(
             count = content.size,
@@ -758,13 +757,16 @@ fun NoteContent(
                         item.text,
                         item.hasCheckBox,
                         index,
-                        focusRequester
+                        focusRequester,
+                        Modifier.onGloballyPositioned { coords ->
+                            lazyColumnHeightPx -= coords.size.height
+                        }
                     )
                 }
 
                 is ItemText -> {
                     if (index == content.lastIndex) {
-                        modifierPart = modifierPart.heightIn(min = remainingHeight)
+                        modifierPart = modifierPart.heightIn(min = with(density) { lazyColumnHeightPx.toDp() })
                     }
                     Log.d("Shit", "Before:${item.text}")
                     TextPart(
@@ -773,6 +775,9 @@ fun NoteContent(
                         index,
                         focusRequester,
                         modifierPart.fillMaxSize()
+                            .onGloballyPositioned { coords ->
+                                lazyColumnHeightPx -= coords.size.height
+                            }
                     )
                 }
 
@@ -781,6 +786,9 @@ fun NoteContent(
                         painter = rememberAsyncImagePainter(item.uri),
                         contentDescription = null,
                         modifier = Modifier.size(200.dp)
+                            .onGloballyPositioned { coords ->
+                                lazyColumnHeightPx -= coords.size.height
+                            }
                     )
                 }
             }
