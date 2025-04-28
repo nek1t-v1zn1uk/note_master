@@ -322,20 +322,25 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
 
     ){ innerPadding ->
 
-        val scrollState = rememberScrollState()
-
-        Column(
+        LazyColumn(
             verticalArrangement = Arrangement.spacedBy(15.dp),
             modifier = Modifier
+                .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 10.dp)
-                .verticalScroll(scrollState)
         ) {
-            Divider(
-                thickness = 10.dp,
-                color = Color.White
-            )
-            for(item in list){
+            item{
+                Divider(
+                    thickness = 10.dp,
+                    color = Color.White
+                )
+            }
+            items(
+                count = list.size,
+                key = { list[it].id }
+            ){ index ->
+                var item = list[index]
+
                 var isPressed by remember { mutableStateOf(false) }
                 val fastInSlowOut = tween<Float>(
                     durationMillis = 300,
@@ -433,7 +438,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                         )
                     }
 
-                    
+
                     if(isCheckState) {
                         Box(
                             contentAlignment = Alignment.CenterEnd,
@@ -452,11 +457,36 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                     }
                 }
             }
+            item{
+                Divider(
+                    thickness = 15.dp,
+                    color = Color.White
+                )
+            }
+        }
+        /*
+        val scrollState = rememberScrollState()
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(15.dp),
+            modifier = Modifier
+                .padding(innerPadding)
+                .padding(horizontal = 10.dp)
+                .verticalScroll(scrollState)
+        ) {
+            Divider(
+                thickness = 10.dp,
+                color = Color.White
+            )
+            for(item in list){
+
+            }
             Divider(
                 thickness = 15.dp,
                 color = Color.White
             )
         }
+        */
     }
 }
 

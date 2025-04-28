@@ -159,6 +159,7 @@ class FocusedItem {
         var updateValue: (String) -> Unit = {}
         var changeNeeded: Boolean = false
         var cursorStart: Int = 0
+        var updateTopBar: () -> Unit = {}
     }
 }
 
@@ -847,9 +848,17 @@ fun NoteContent(
 @Composable
 fun NoteContentTop(note: Note, modifier: Modifier = Modifier){
 
-    var nameValue = note.name //by remember { mutableStateOf(note.name) }
+    var nameValue = note.name // by remember { mutableStateOf(note.name) }
     var dateValue = note.lastEdit //by remember { mutableStateOf(note.lastEdit) }
     var symbolCount = note.content.getSymbolsCount() //by remember { mutableStateOf(note.content.getSymbolsCount()) }
+
+    var refreshTrigger by remember { mutableStateOf(0) }
+    FocusedItem.updateTopBar = {
+        refreshTrigger++
+    }
+    LaunchedEffect(refreshTrigger) {
+        Log.d("Mmm", "mmm")
+    }
 
     Column(
         modifier = modifier
@@ -857,9 +866,10 @@ fun NoteContentTop(note: Note, modifier: Modifier = Modifier){
         TextField(
             value = nameValue,
             onValueChange = {
-                nameValue = it
-                note.name = nameValue
+                //nameValue = it
+                note.name = it
                 note.lastEdit = LocalDateTime.now()
+                FocusedItem.updateTopBar()
             },
             placeholder = { Text("Назва", fontSize = 24.sp) },
             singleLine = true,
@@ -929,6 +939,7 @@ fun TextPart(
             FocusedItem.updateValue = { value: String ->
                 textFieldValue = textFieldValue.copy(text = value)
             }
+            FocusedItem.updateTopBar()
 
             /*
             val selection = newValue.selection
