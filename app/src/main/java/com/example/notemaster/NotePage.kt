@@ -101,8 +101,11 @@ import java.util.Locale
 import kotlin.math.atan
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.tooling.preview.Wallpapers
+import androidx.core.net.toUri
 import androidx.navigation.compose.currentBackStackEntryAsState
+import java.io.FileOutputStream
 
 
 @Composable
@@ -219,24 +222,42 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
         }
     )
     fun openGallery() {
+        imageUri.value = null
         waitingForImage.value = true
         launcher.launch(arrayOf("image/*"))
     }
     //starts when image is pressed
     LaunchedEffect(imageUri.value) {
         imageUri.value?.let { uri ->
-            // This block is only triggered after image is selected!
-            val newImageItem = ItemImage(uri)
+            // 1. Copy the image to app's internal storage
+            val inputStream = context.contentResolver.openInputStream(uri)
+            val fileName = "image_${System.currentTimeMillis()}.jpg"
+            val outputFile = File(context.filesDir, fileName)
+            val outputStream = FileOutputStream(outputFile)
+
+            inputStream?.use { input ->
+                outputStream.use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            // 2. Get the URI of the copied image
+            val localUri = outputFile.toUri()
+
+            // 3. Continue with your logic but using localUri instead of the original one
+            val newImageItem = ItemImage(localUri)
+
             Log.d("Pictures", "Size:${note.content.list.size}\nFocusedItem.indexInList: ${FocusedItem.indexInList}")
+            Log.d("Pictures", "indexInItem:${FocusedItem.indexInItem}\nFocusedItem.indexInList: ${FocusedItem.indexInList}")
             var item = note.content.list[FocusedItem.indexInList]
             if(item is ItemText) {
                 var indexInListOfNewImage = -1
 
                 if (FocusedItem.indexInItem == 0) {
-                    Log.d("Pictures", "State: 1")
-                    indexInListOfNewImage = 0
+                    indexInListOfNewImage = FocusedItem.indexInList
+                    FocusedItem.indexInList++
+                    Log.d("Pictures", "Set FocusedItem.indexInList: ${FocusedItem.indexInList}")
                 } else if (FocusedItem.indexInItem == item.text.length) {
-                    Log.d("Pictures", "State: 2")
                     indexInListOfNewImage = FocusedItem.indexInList + 1
                     if (FocusedItem.indexInList == note.content.list.size - 1)
                         note.content.addComponent(
@@ -244,30 +265,27 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                             ItemText("")//, style = item.style)
                         )
                 } else {
-                    Log.d("Pictures", "State: 3")
                     indexInListOfNewImage = FocusedItem.indexInList + 1
                     var firstText = item.text.substring(0, FocusedItem.indexInItem)
-                    var secondText =
-                        item.text.substring(FocusedItem.indexInItem, item.text.length)
-                    Log.d("Shit", "item.text:${item.text};  firstText:${firstText}; secondText:${secondText};")
+                    var secondText = item.text.substring(FocusedItem.indexInItem)
                     item.text = firstText
                     note.content.addComponent(
                         FocusedItem.indexInList + 1,
-                        ItemText(secondText)//, style = item.style)
+                        ItemText(secondText)
                     )
                     FocusedItem.updateValue(firstText)
                 }
-                Log.d("Pictures", "indexInListOfNewImage:${indexInListOfNewImage}")
+
                 note.content.addComponent(
                     indexInListOfNewImage,
                     newImageItem
                 )
                 imageUri.value = null
-
                 note.lastEdit = LocalDateTime.now()
             }
         }
     }
+
     //end gallery-picker
 
     //start of camera
@@ -339,7 +357,8 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                     var indexInListOfNewImage = -1
 
                     if (FocusedItem.indexInItem == 0) {
-                        indexInListOfNewImage = 0
+                        indexInListOfNewImage = FocusedItem.indexInList
+                        FocusedItem.indexInList++
                     } else if (FocusedItem.indexInItem == item.text.length) {
                         indexInListOfNewImage = FocusedItem.indexInList + 1
                         if (FocusedItem.indexInList == note.content.list.size - 1) {
@@ -399,15 +418,59 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
     LaunchedEffect(drawingPath) {
         drawingPath?.let { path ->
             val uri = Uri.fromFile(File(path))
-            // append right after the focused item (or wherever you’d like)
-            note.content.addComponent(
-                index = FocusedItem.indexInList + 1,
-                item = ItemImage(uri)
-            )
+
+            val newImageItem = ItemImage(uri)
+            Log.d("MyData", "Draw uri:${uri}; FocusedItem.indexInList:${FocusedItem.indexInList}")
+            val item = note.content.list[FocusedItem.indexInList]
+            Log.d("MyData", "test1")
+            if (item is ItemText) {
+                Log.d("MyData", "test2")
+                var indexInListOfNewImage = -1
+
+                if (FocusedItem.indexInItem == 0) {
+                    Log.d("MyData", "test3")
+                    indexInListOfNewImage = FocusedItem.indexInList
+                    FocusedItem.indexInList++
+                } else if (FocusedItem.indexInItem == item.text.length) {
+                    Log.d("MyData", "test4")
+                    indexInListOfNewImage = FocusedItem.indexInList + 1
+                    if (FocusedItem.indexInList == note.content.list.size - 1) {
+                        note.content.addComponent(
+                            FocusedItem.indexInList + 1,
+                            ItemText("")//, style = item.style)
+                        )
+                    }
+                } else {
+                    indexInListOfNewImage = FocusedItem.indexInList + 1
+                    Log.d("MyData", "test5; FocusedItem.indexInItem:${FocusedItem.indexInItem}; item.text:${item.text}")
+                    val firstText = item.text.substring(0, FocusedItem.indexInItem)
+                    val secondText = item.text.substring(FocusedItem.indexInItem)
+                    Log.d("MyData", "test5.1")
+                    item.text = firstText
+                    Log.d("MyData", "test5.2")
+                    note.content.addComponent(
+                        FocusedItem.indexInList + 1,
+                        ItemText(secondText)//, style = item.style)
+                    )
+                    Log.d("MyData", "test5.3")
+                    FocusedItem.updateValue(firstText)
+                    Log.d("MyData", "test5.4")
+                }
+                Log.d("MyData", "test6")
+
+                note.content.addComponent(indexInListOfNewImage, newImageItem)
+            }
+
+            photoUri = null
+
+            note.lastEdit = LocalDateTime.now()
+
             // remove so it doesn’t fire again
             backStackEntry
                 ?.savedStateHandle
                 ?.remove<String>("drawingPath")
+
+            Log.d("MyData", "test8")
         }
     }
     //end of drawing
@@ -487,6 +550,9 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                             //drawing
                             IconButton(
                                 onClick = {
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        noteDao.update(note.toEntity())
+                                    }
                                     navController.navigate("drawing")
                                 },
                                 modifier = Modifier
@@ -971,6 +1037,20 @@ fun TextPart(
         modifier = modifier
             .focusRequester(focusRequester)
             .focusable()
+            .onFocusChanged { focusState ->
+                if (focusState.isFocused) {
+                    // The cursor position is the start of the selection
+                    val cursorPosition = textFieldValue.selection.start
+
+                    // Optional: update FocusedItem if needed
+                    FocusedItem.indexInList = indexInList
+                    FocusedItem.indexInItem = cursorPosition
+                    FocusedItem.updateValue = { value: String ->
+                        textFieldValue = textFieldValue.copy(text = value)
+                    }
+                    FocusedItem.updateTopBar()
+                }
+            }
     )
 }
 
