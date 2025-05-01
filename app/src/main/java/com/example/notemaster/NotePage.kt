@@ -1227,6 +1227,11 @@ fun ImagePart(
                             menuExpanded = false
                             val newList = note.content.list.toMutableList()
                             newList.removeAt(indexInList)
+                            if(indexInList > 0 && newList[indexInList - 1] is ItemText && newList[indexInList] is ItemText){
+                                (newList[indexInList - 1] as ItemText).text += "\n" + (newList[indexInList] as ItemText).text
+                                newList.removeAt(indexInList)
+                            }
+
                             note.content.list = newList
                             CoroutineScope(Dispatchers.IO).launch {
                                 FocusedItem.noteDao.update(note.toEntity())
