@@ -1,53 +1,48 @@
 package com.example.notemaster
 
 import android.Manifest
-import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.TextSelectionColors
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Draw
-import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.TextDecrease
-import androidx.compose.material.icons.filled.TextIncrease
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -55,57 +50,52 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarColors
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.Wallpapers
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import androidx.core.text.trimmedLength
+import androidx.core.net.toUri
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.atan
-import androidx.compose.runtime.*
-import androidx.compose.runtime.collectAsState
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.tooling.preview.Wallpapers
-import androidx.core.net.toUri
-import androidx.navigation.compose.currentBackStackEntryAsState
-import java.io.FileOutputStream
+import kotlin.math.max
 
 
 @Composable
@@ -163,12 +153,17 @@ class FocusedItem {
         var changeNeeded: Boolean = false
         var cursorStart: Int = 0
         var updateTopBar: () -> Unit = {}
+        var updateContent: () -> Unit = {}
+        lateinit var noteDao: NoteDao
+        lateinit var focusManager: FocusManager
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
+
+    FocusedItem.noteDao = noteDao
 
     var note: Note by remember { mutableStateOf(Note()) }
 
@@ -190,6 +185,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
     var isKeyboard by remember { mutableStateOf(false) }
 
     val focusManager = LocalFocusManager.current
+    FocusedItem.focusManager = focusManager
     OnKeyboardStartShowing {
         isKeyboard = true
     }
@@ -482,11 +478,11 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
         contentWindowInsets = WindowInsets.statusBars.union(WindowInsets.navigationBars),
         // push *only* the bottomBar by the IME height
         modifier = Modifier
-            //.navigationBarsPadding()
-            //.imePadding()
-            //.windowInsetsPadding(WindowInsets.navigationBars)
-            //.windowInsetsPadding(WindowInsets.ime)
-                ,
+        //.navigationBarsPadding()
+        //.imePadding()
+        //.windowInsetsPadding(WindowInsets.navigationBars)
+        //.windowInsetsPadding(WindowInsets.ime)
+        ,
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -723,7 +719,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                 }
         }
     ) {
-        innerPadding ->
+            innerPadding ->
 
         NoteContent(note,
             Modifier
@@ -793,81 +789,88 @@ fun NoteContent(
     val density = LocalDensity.current
     var lazyColumnHeightPx by remember { mutableStateOf(0) }
 
+    var recomposeTrigger by remember { mutableStateOf(0) } // 👈 1. recomposition trigger
+    val forceRecompose: () -> Unit = { recomposeTrigger++ }            // 👈 2. lambda
+    FocusedItem.updateContent = forceRecompose
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .onGloballyPositioned { coords ->
-                lazyColumnHeightPx = coords.size.height
-            }
-    ) {
-        item {
-            NoteContentTop(
-                note,
-                modifier = Modifier.onGloballyPositioned { coords ->
-                    lazyColumnHeightPx -= coords.size.height
+    key(recomposeTrigger) {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .onGloballyPositioned { coords ->
+                    lazyColumnHeightPx = coords.size.height
                 }
-                    .padding(bottom = 16.dp)
-            )
-        }
-        note.content.ensureTrailingText()
-        val content: MutableList<ContentItem> = note.content.list
-
-
-        items(
-            count = content.size,
-            key = { content[it].id } // 👈 This ensures Compose tracks each item correctly
-        ) { index ->
-            val focusRequester = remember { FocusRequester() }
-            var modifierPart: Modifier = Modifier
-            val item = content[index]
-
-            when (item) {
-                is ItemCheckBox -> {
-                    CheckBoxPart(
-                        item.text,
-                        item.hasCheckBox,
-                        index,
-                        focusRequester,
-                        Modifier.onGloballyPositioned { coords ->
+        ) {
+            item {
+                NoteContentTop(
+                    note,
+                    modifier = Modifier
+                        .onGloballyPositioned { coords ->
                             lazyColumnHeightPx -= coords.size.height
                         }
-                    )
-                }
+                        .padding(bottom = 16.dp)
+                )
+            }
+            note.content.ensureTrailingText()
+            val content: MutableList<ContentItem> = note.content.list
 
-                is ItemText -> {
-                    if (index == content.lastIndex) {
-                        modifierPart = modifierPart.heightIn(min = with(density) { lazyColumnHeightPx.toDp() })
+
+            items(
+                count = content.size,
+                key = { content[it].id } // 👈 This ensures Compose tracks each item correctly
+            ) { index ->
+                val focusRequester = remember { FocusRequester() }
+                var modifierPart: Modifier = Modifier
+                val item = content[index]
+
+                when (item) {
+                    is ItemCheckBox -> {
+                        CheckBoxPart(
+                            item.text,
+                            item.hasCheckBox,
+                            index,
+                            focusRequester,
+                            Modifier.onGloballyPositioned { coords ->
+                                lazyColumnHeightPx -= coords.size.height
+                            }
+                        )
                     }
-                    Log.d("Shit", "Before:${item.text}")
-                    TextPart(
-                        note,
-                        item,
-                        index,
-                        focusRequester,
-                        modifierPart.fillMaxSize()
-                            .onGloballyPositioned { coords ->
-                                lazyColumnHeightPx -= coords.size.height
-                            }
-                    )
-                }
 
-                is ItemImage -> {
-                    ImagePart(
-                        note = note,
-                        item = item,
-                        indexInList = index,
-                        modifier = Modifier
-                            .onGloballyPositioned { coords ->
-                                lazyColumnHeightPx -= coords.size.height
-                            }
-                    )
+                    is ItemText -> {
+                        if (index == content.lastIndex) {
+                            modifierPart =
+                                modifierPart.heightIn(min = with(density) { lazyColumnHeightPx.toDp() })
+                        }
+                        Log.d("Shit", "Before:${item.text}")
+                        TextPart(
+                            note,
+                            item,
+                            index,
+                            focusRequester,
+                            modifierPart
+                                .fillMaxSize()
+                                .onGloballyPositioned { coords ->
+                                    lazyColumnHeightPx -= coords.size.height
+                                }
+                        )
+                    }
+
+                    is ItemImage -> {
+                        ImagePart(
+                            note = note,
+                            item = item,
+                            indexInList = index,
+                            modifier = Modifier
+                                .onGloballyPositioned { coords ->
+                                    lazyColumnHeightPx -= coords.size.height
+                                }
+                        )
+                    }
                 }
             }
-        }
 
 
-        /*
+            /*
         var content: MutableList<ContentItem> = note.content.list
 
         var remainingHeight = with(density) { lazyColumnHeightPx.toDp() }
@@ -908,6 +911,7 @@ fun NoteContent(
                 )
             }
         }*/
+        }
     }
 }
 
@@ -1030,7 +1034,7 @@ fun TextPart(
             disabledIndicatorColor = Color(red = 100, green = 100, blue = 255),
             errorIndicatorColor = Color(red = 100, green = 100, blue = 255),
 
-        ),
+            ),
         singleLine = false,
         maxLines = Int.MAX_VALUE,
         textStyle = TextStyle(fontSize = 18.sp, color = Color.Black),
@@ -1110,14 +1114,155 @@ fun ImagePart(
     indexInList: Int,
     modifier: Modifier = Modifier
 ){
-    Image(
-        painter = rememberAsyncImagePainter(item.uri),
-        contentDescription = null,
-        modifier = modifier
-            .size(200.dp)
-            .border(2.dp, Color.Black, RoundedCornerShape(10.dp))
-    )
+    val context = LocalContext.current
+    val size = remember(item.uri) {
+        getImageSize(context, item.uri)
+    }
+    val width = size?.first?:0
+    val height = size?.second?:0
+    var widthOfImage = 0
+    var heightOfImage = 0
+    if(height > 200){
+        heightOfImage = 200
+        widthOfImage = 200 * width / height
+    }
+    else{
+        heightOfImage = height
+        widthOfImage = width
+    }
+
+    if(widthOfImage > LocalConfiguration.current.screenWidthDp - 40){
+        widthOfImage = LocalConfiguration.current.screenWidthDp - 40
+        heightOfImage = height * widthOfImage / width
+    }
+
+
+    var menuExpanded by remember { mutableStateOf(false) }
+    var imageOffsetOnScreen by remember { mutableStateOf(Offset.Zero) }
+
+    var globalHeightOfImage  by remember { mutableStateOf(0) }
+
+    Box(
+        modifier = Modifier
+            .padding(start = 10.dp, top = 5.dp, bottom = 5.dp)
+            .clickable(onClick = {
+                FocusedItem.focusManager.clearFocus()
+                menuExpanded = true
+                Log.d("Image", "Dibidy0")
+            })
+        /*
+        .pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val down = event.changes.firstOrNull()?.takeIf { it.pressed }
+                    if (down != null) {
+                        clickOffset = down.position
+                        menuExpanded = true
+                    }
+                }
+            }
+        }
+        */
+    ) {
+        Image(
+            painter = rememberAsyncImagePainter(item.uri),
+            contentDescription = null,
+            modifier = modifier
+                .size(width = widthOfImage.dp, height = heightOfImage.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .border(2.dp, Color.Black, RoundedCornerShape(10.dp))
+                .onGloballyPositioned { coords ->
+                    val position = coords.positionInWindow()
+                    imageOffsetOnScreen = position
+                    globalHeightOfImage = coords.size.height
+                }
+        )
+        if (menuExpanded) {
+            val popupX = 20f  // 50 = half of popup width
+            val popupY = max(globalHeightOfImage / 2f - 20 * globalHeightOfImage / heightOfImage, 0f) // 35 = half of popup height
+
+            Popup(
+                alignment = Alignment.TopStart,
+                offset = IntOffset(popupX.toInt(), popupY.toInt()),
+                onDismissRequest = { menuExpanded = false },
+                properties = PopupProperties(focusable = true)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White)
+                        .border(1.dp, Color.Black, RoundedCornerShape(12.dp))
+                ) {
+                    IconButton(
+                        onClick = {  },
+                        modifier = Modifier
+                            .size(width = 50.dp, height = 40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Draw,
+                            tint = Color.Black,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(30.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = {  },
+                        modifier = Modifier
+                            .size(width = 50.dp, height = 40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.OpenInNew,
+                            tint = Color.Black,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(30.dp)
+                        )
+                    }
+                    Log.d("Image", "Dibidy0")
+                    IconButton(
+                        onClick = {
+                            Log.d("Image", "Dibidy1")
+                            menuExpanded = false
+                            val newList = note.content.list.toMutableList()
+                            newList.removeAt(indexInList)
+                            note.content.list = newList
+                            CoroutineScope(Dispatchers.IO).launch {
+                                FocusedItem.noteDao.update(note.toEntity())
+                            }
+                            FocusedItem.updateContent()
+                            Log.d("Image", "Dibidy2")
+                        },
+                        modifier = Modifier
+                            .size(width = 50.dp, height = 40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            tint = Color.Black,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(30.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
+fun getImageSize(context: Context, uri: Uri): Pair<Int, Int>? {
+    return try {
+        context.contentResolver.openInputStream(uri)?.use { inputStream ->
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeStream(inputStream, null, options)
+            Pair(options.outWidth, options.outHeight)
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
 
 
 @Preview(wallpaper = Wallpapers.NONE)
