@@ -1423,7 +1423,28 @@ fun ImagePart(
                         )
                     }
                     IconButton(
-                        onClick = {  },
+                        onClick = {
+                            val file = File(item.uri.path ?: "")
+                            val sharedUri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                file
+                            )
+
+                            val mimeType = context.contentResolver.getType(sharedUri) ?: "image/*"
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(sharedUri, mimeType)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            val chooser = Intent.createChooser(intent, "Відкрити зображення")
+                            val canOpen = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY).isNotEmpty()
+                            if (canOpen) {
+                                context.startActivity(chooser)
+                            } else {
+                                Toast.makeText(context, "Немає додатків для відкриття зображення", Toast.LENGTH_SHORT).show()
+                            }
+
+                        },
                         modifier = Modifier
                             .size(width = 50.dp, height = 40.dp)
                     ) {
@@ -1561,7 +1582,7 @@ fun FilePart(
                             Toast.makeText(context, "Немає додатків для відкриття", Toast.LENGTH_SHORT).show()
                         }
                     }) {
-                        Icon(Icons.Default.OpenWith, contentDescription = null, tint = Color.Black)
+                        Icon(Icons.Default.OpenInNew, contentDescription = null, tint = Color.Black)
                     }
 
                     IconButton(onClick = {
