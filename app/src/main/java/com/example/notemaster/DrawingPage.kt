@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material3.BottomAppBar
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -173,39 +175,43 @@ fun DrawingPage(navController: NavController, existingImageUri: Uri? = null) {
             )
         },
         bottomBar = {
-            Column(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .background(Color.White, RoundedCornerShape(8.dp))
-                    .padding(vertical = 8.dp, horizontal = 16.dp)
+            BottomAppBar(
+                Modifier
+                    .windowInsetsPadding(WindowInsets.ime)
             ) {
-                Row {
-                    listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Magenta).forEach { color ->
-                        Box(
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .clip(CircleShape)
-                                .background(color, shape = CircleShape)
-                                .size(36.dp)
-                                .clickable { selectedColor = color }
-                                .border(
-                                    width = if (selectedColor == color) 3.dp else 1.dp,
-                                    color = if (selectedColor == color) Color.Gray else Color.Black,
-                                    shape = CircleShape
-                                )
+                Column(
+                    modifier = Modifier
+                        .background(Color.White, RoundedCornerShape(8.dp))
+                        .padding(vertical = 8.dp, horizontal = 16.dp)
+                ) {
+                    Row {
+                        listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Magenta).forEach { color ->
+                            Box(
+                                modifier = Modifier
+                                    .padding(4.dp)
+                                    .clip(CircleShape)
+                                    .background(color, shape = CircleShape)
+                                    .size(36.dp)
+                                    .clickable { selectedColor = color }
+                                    .border(
+                                        width = if (selectedColor == color) 3.dp else 1.dp,
+                                        color = if (selectedColor == color) Color.Gray else Color.Black,
+                                        shape = CircleShape
+                                    )
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                        //Text("Товщина: %.0f".format(strokeWidth), modifier = Modifier.padding(end = 8.dp))
+                        androidx.compose.material3.Slider(
+                            value = strokeWidth,
+                            onValueChange = { strokeWidth = it },
+                            valueRange = 1f..20f,
+                            steps = 18,
+                            modifier = Modifier.weight(1f)
                         )
                     }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                    Text("Товщина: %.0f".format(strokeWidth), modifier = Modifier.padding(end = 8.dp))
-                    androidx.compose.material3.Slider(
-                        value = strokeWidth,
-                        onValueChange = { strokeWidth = it },
-                        valueRange = 1f..20f,
-                        steps = 18,
-                        modifier = Modifier.weight(1f)
-                    )
                 }
             }
         }
@@ -425,10 +431,10 @@ fun updateImageWithDrawing(
 
     strokes.forEach { stroke ->
         stroke.points.forEach { pt ->
-            minX = minOf(minX, pt.x)
-            minY = minOf(minY, pt.y)
-            maxX = maxOf(maxX, pt.x)
-            maxY = maxOf(maxY, pt.y)
+            minX = minOf(minX, pt.x - 20)
+            minY = minOf(minY, pt.y - 20)
+            maxX = maxOf(maxX, pt.x + 20)
+            maxY = maxOf(maxY, pt.y + 20)
         }
     }
 

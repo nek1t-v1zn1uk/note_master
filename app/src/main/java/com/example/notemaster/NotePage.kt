@@ -492,13 +492,20 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture(),
         onResult = { success ->
-            Log.d("CameraResult", "Camera returned success: $success, URI: $cameraImagePath")
             if (success && cameraImagePath != null) {
-                photoUri = cameraImagePath
+                // 1) конвертуємо content:// URI назад у file:// URI
+                val fileUri = Uri.fromFile(photoFile)
+                photoUri = fileUri
                 waitingForCameraPhoto = false
+                // 2) відкручуємо тимчасові права на content URI
+                context.revokeUriPermission(
+                    cameraImagePath!!,
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
             }
         }
     )
+
 
     fun openCamera() {
         val uri = createCameraImageUri()
@@ -654,6 +661,10 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                 ?.remove<String>("drawingPath")
 
             Log.d("MyData", "test8")
+
+            CoroutineScope(Dispatchers.IO).launch {
+                noteDao.update(note.toEntity())
+            }
         }
     }
 //end of drawing
