@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -500,6 +502,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
     )
 
     fun openFilePicker() {
+        fileUri.value = null
         filePickerLauncher.launch(arrayOf("*/*")) // Allow all types
     }
 
@@ -510,21 +513,21 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
 
             var item = note.content.list[FocusedItem.indexInList]
             if(item is ItemText) {
-                var indexInListOfNewImage = -1
+                var indexInListOfNewFile = -1
 
                 if (FocusedItem.indexInItem == 0) {
-                    indexInListOfNewImage = FocusedItem.indexInList
+                    indexInListOfNewFile = FocusedItem.indexInList
                     FocusedItem.indexInList++
                     Log.d("Pictures", "Set FocusedItem.indexInList: ${FocusedItem.indexInList}")
                 } else if (FocusedItem.indexInItem == item.text.length) {
-                    indexInListOfNewImage = FocusedItem.indexInList + 1
+                    indexInListOfNewFile = FocusedItem.indexInList + 1
                     if (FocusedItem.indexInList == note.content.list.size - 1)
                         note.content.addComponent(
                             FocusedItem.indexInList + 1,
                             ItemText("")//, style = item.style)
                         )
                 } else {
-                    indexInListOfNewImage = FocusedItem.indexInList + 1
+                    indexInListOfNewFile = FocusedItem.indexInList + 1
                     var firstText = item.text.substring(0, FocusedItem.indexInItem)
                     var secondText = item.text.substring(FocusedItem.indexInItem)
                     item.text = firstText
@@ -536,10 +539,14 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                 }
 
                 note.content.addComponent(
-                    indexInListOfNewImage,
+                    indexInListOfNewFile,
                     newFileItem
                 )
+                Log.d("MyFiles", "indexInListOfNewFile:$indexInListOfNewFile")
                 note.lastEdit = LocalDateTime.now()
+
+                focusManager.clearFocus()
+                isKeyboard = false
             }
 
         }
@@ -908,7 +915,9 @@ fun NoteContent(
 
                     is ItemFile -> {
                         FilePart(
+                            note = note,
                             item = item,
+                            indexInList = index,
                             modifier = Modifier
                                 .onGloballyPositioned { coords ->
                                     lazyColumnHeightPx -= coords.size.height
@@ -1277,10 +1286,15 @@ fun getImageSize(context: Context, uri: Uri): Pair<Int, Int>? {
 
 @Composable
 fun FilePart(
+    note: Note,
     item: ItemFile,
+    indexInList: Int,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -1288,28 +1302,27 @@ fun FilePart(
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xFFF2F2F2))
             .border(1.dp, Color.Black, RoundedCornerShape(8.dp))
-            .clickable {
-                val fallbackType = when {
-                    item.fileName.endsWith(".pdf", true) -> "application/pdf"
-                    item.fileName.endsWith(".doc", true) || item.fileName.endsWith(".docx", true) -> "application/msword"
-                    item.fileName.endsWith(".txt", true) -> "text/plain"
-                    else -> "*/*"
-                }
-                val mimeType = context.contentResolver.getType(item.uri) ?: fallbackType
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(item.uri, mimeType)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-
-                val chooser = Intent.createChooser(intent, "Відкрити файл")
-
-                // Check if there is at least one app that can handle this intent
-                val resolveInfos = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
-                if (resolveInfos.isNotEmpty()) {
-                    context.startActivity(chooser)
-                } else {
-                    Toast.makeText(context, "Немає додатків для відкриття цього файлу", Toast.LENGTH_SHORT).show()
-                }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        // Default open behavior on tap
+                        val mimeType = context.contentResolver.getType(item.uri) ?: "*/*"
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(item.uri, mimeType)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        val chooser = Intent.createChooser(intent, "Відкрити файл")
+                        val canOpen = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY).isNotEmpty()
+                        if (canOpen) {
+                            context.startActivity(chooser)
+                        } else {
+                            Toast.makeText(context, "Немає додатків для відкриття", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onLongPress = {
+                        menuExpanded = true
+                    }
+                )
             }
             .padding(12.dp)
     ) {
@@ -1318,6 +1331,61 @@ fun FilePart(
             color = Color.Black,
             fontSize = 16.sp
         )
+
+
+        if (menuExpanded) {
+            Popup(
+                alignment = Alignment.CenterStart, // or adjust as needed
+                offset = IntOffset(0, 0), // optional: customize
+                onDismissRequest = { menuExpanded = false },
+                properties = PopupProperties(focusable = true)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White)
+                        .border(1.dp, Color.Black, RoundedCornerShape(12.dp))
+                ) {
+                    IconButton(onClick = {
+                        menuExpanded = false
+                        // Default open behavior on tap
+                        val mimeType = context.contentResolver.getType(item.uri) ?: "*/*"
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(item.uri, mimeType)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        val chooser = Intent.createChooser(intent, "Відкрити файл")
+                        val canOpen = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY).isNotEmpty()
+                        if (canOpen) {
+                            context.startActivity(chooser)
+                        } else {
+                            Toast.makeText(context, "Немає додатків для відкриття", Toast.LENGTH_SHORT).show()
+                        }
+                    }) {
+                        Icon(Icons.Default.OpenWith, contentDescription = null, tint = Color.Black)
+                    }
+
+                    IconButton(onClick = {
+                        menuExpanded = false
+
+                        val newList = note.content.list.toMutableList()
+                        newList.removeAt(indexInList)
+                        if(indexInList > 0 && newList[indexInList - 1] is ItemText && newList[indexInList] is ItemText){
+                            (newList[indexInList - 1] as ItemText).text += "\n" + (newList[indexInList] as ItemText).text
+                            newList.removeAt(indexInList)
+                        }
+
+                        note.content.list = newList
+                        CoroutineScope(Dispatchers.IO).launch {
+                            FocusedItem.noteDao.update(note.toEntity())
+                        }
+                        FocusedItem.updateContent()
+                    }) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = Color.Black)
+                    }
+                }
+            }
+        }
     }
 }
 
