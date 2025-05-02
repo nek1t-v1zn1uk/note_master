@@ -38,6 +38,7 @@ import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -92,13 +93,16 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.handleCoroutineException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.LinkedList
 import java.util.Locale
+import java.util.Stack
 import kotlin.math.max
 
 
@@ -160,6 +164,169 @@ fun getFileName(context: Context, uri: Uri): String {
     return "unknown_file"
 }
 
+fun evaluateExpression(input: String): Double {
+    // 1) Normalize commas to dots
+    val expr = input.replace(',', '.').replace("\\s+".toRegex(), "")
+    // 2) Tokenize
+    val tokens = tokenize(expr)
+    // 3) Infix → RPN
+    val outputQueue = LinkedList<String>()
+    val opStack = Stack<String>()
+
+    fun precedence(op: String) = when (op) {
+        "+", "-" -> 1
+        "*", "/" -> 2
+        else     -> 0
+    }
+
+    for (tok in tokens) {
+        when {
+            tok.matches("""-?\d+(\.\d+)?""".toRegex()) -> // number (with optional leading –)
+                outputQueue += tok
+            tok in listOf("+", "-", "*", "/") -> {
+                while (opStack.isNotEmpty() &&
+                    precedence(opStack.peek()) >= precedence(tok)) {
+                    outputQueue += opStack.pop()
+                }
+                opStack.push(tok)
+            }
+            tok == "(" ->
+                opStack.push(tok)
+            tok == ")" -> {
+                while (opStack.isNotEmpty() && opStack.peek() != "(") {
+                    outputQueue += opStack.pop()
+                }
+                if (opStack.isEmpty() || opStack.pop() != "(")
+                    throw IllegalArgumentException("Mismatched parentheses in \"$input\"")
+            }
+        }
+    }
+    while (opStack.isNotEmpty()) {
+        val op = opStack.pop()
+        if (op in listOf("(", ")"))
+            throw IllegalArgumentException("Mismatched parentheses in \"$input\"")
+        outputQueue += op
+    }
+
+    // 4) Evaluate RPN
+    val evalStack = Stack<Double>()
+    for (tok in outputQueue) {
+        if (tok.matches("""-?\d+(\.\d+)?""".toRegex())) {
+            evalStack.push(tok.toDouble())
+        } else {
+            if (evalStack.size < 2)
+                throw IllegalArgumentException("Bad expression: \"$input\"")
+            val b = evalStack.pop()
+            val a = evalStack.pop()
+            val res = when (tok) {
+                "+" -> a + b
+                "-" -> a - b
+                "*" -> a * b
+                "/" -> a / b
+                else -> throw IllegalStateException("Unknown operator $tok")
+            }
+            evalStack.push(res)
+        }
+    }
+    if (evalStack.size != 1)
+        throw IllegalArgumentException("Bad expression: \"$input\"")
+    return evalStack.pop()
+}
+
+private fun tokenize(s: String): List<String> {
+    val tokens = mutableListOf<String>()
+    var i = 0
+    while (i < s.length) {
+        when (val c = s[i]) {
+            in '0'..'9', '.' -> {
+                val start = i
+                while (i < s.length && (s[i].isDigit() || s[i] == '.')) i++
+                tokens += s.substring(start, i)
+            }
+            '+' , '*', '/', '(', ')' -> {
+                tokens += c.toString()
+                i++
+            }
+            '-' -> {
+                // unary minus if at start or after '(' or another operator
+                if (i == 0 || s[i-1] == '(' || s[i-1] in "+-*/") {
+                    val start = i
+                    i++
+                    // consume digits and dot
+                    while (i < s.length && (s[i].isDigit() || s[i] == '.')) i++
+                    tokens += s.substring(start, i)
+                } else {
+                    tokens += "-"
+                    i++
+                }
+            }
+            else ->
+                throw IllegalArgumentException("Invalid character ‘$c’ in expression")
+        }
+    }
+    return tokens
+}
+
+fun checkCalculate(text: TextFieldValue, item: ItemText) {
+    var startOfLine = 0
+    text.text
+        .take(text.selection.start)
+        .forEachIndexed { index, c ->
+            if (c == '\n')
+                startOfLine = index + 1
+        }
+    var checkableTextLine = text.text.substring(startOfLine, text.selection.start)
+    Log.d("MyTexts", "startOfLine:${startOfLine}; text.selection.start:${text.selection.start}; checkableTextLine:${checkableTextLine}")
+    //тіко підходящі символи
+    var startOfExpressionInLine = 0
+    var checkableText = checkableTextLine
+    for((index, c) in checkableTextLine.reversed().withIndex()){
+        if(!(c.isDigit() || c=='+' || c=='-' || c=='*' || c=='/' || c=='(' || c==')' || c==' ' || c=='.' || c==',')) {
+            checkableText = checkableTextLine.substring(checkableTextLine.length - index, checkableTextLine.length)
+            startOfExpressionInLine = checkableTextLine.length - index
+            break
+        }
+    }
+    if(startOfExpressionInLine != 0) {
+        if (checkableText.indexOf(' ') == -1) {
+            checkableText = "no"
+        } else {
+            checkableText = checkableText.substring(checkableText.indexOf(' '), checkableText.length)
+        }
+    }
+
+    //розрив по пробілу "dasd 5+..."
+    Log.d("MyTexts", "checkableText ready:${checkableText}")
+
+    try {
+        var result = evaluateExpression(checkableText)
+        Log.d("MyTexts", "result:${result}")
+        FocusedItem.canCalculate = true
+        val start = text.selection.start
+        val suffix = " = ${result} "
+        FocusedItem.makeCalculations = {
+            // build new full text
+            val newText = buildString {
+                    append(text.text.substring(0, start))
+                    append(suffix)
+                    append(text.text.substring(start))
+                }
+            // absolute new cursor position
+            FocusedItem.cursorStart = start + suffix.length
+            // inject it
+            FocusedItem.updateValue(newText)
+            FocusedItem.changeNeeded = true
+            item.text = newText
+        }
+        FocusedItem.updateCalculator(true)
+
+    } catch (e: Exception){
+        Log.d("MyTexts", "result: Cocaine")
+        FocusedItem.canCalculate = false
+        FocusedItem.updateCalculator(false)
+    }
+}
+
 class FocusedItem {
     companion object {
         var indexInList: Int = 0
@@ -171,6 +338,9 @@ class FocusedItem {
         var updateContent: () -> Unit = {}
         lateinit var noteDao: NoteDao
         lateinit var focusManager: FocusManager
+        var canCalculate = false
+        var makeCalculations: () -> Unit = {}
+        var updateCalculator: (Boolean) -> Unit = {}
     }
 }
 
@@ -684,6 +854,32 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                                         .size(36.dp)
                                 )
                             }
+                            var canCalculate by remember { mutableStateOf(FocusedItem.canCalculate) }
+                            LaunchedEffect(Unit) {
+                                FocusedItem.updateCalculator = { b: Boolean ->
+                                    canCalculate = b
+                                }
+                            }
+                            //calculator
+                            IconButton(
+                                onClick = {
+                                    if(FocusedItem.canCalculate){
+                                        FocusedItem.makeCalculations()
+                                        FocusedItem.canCalculate = false
+                                        canCalculate = false
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Calculate,
+                                    contentDescription = null,
+                                    tint = if(canCalculate) Color.Black else Color.Gray,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                )
+                            }
                             //checkbox
                             /*IconButton(
                                 onClick = {
@@ -1002,9 +1198,11 @@ fun TextPart(
     LaunchedEffect(item.text) {
         if (indexInList == FocusedItem.indexInList && FocusedItem.changeNeeded) {
             Log.d("Shit", "TB - indexInList:${indexInList}; ")
-            focusRequester.requestFocus()
+            //Крч воно тут було, але з ним калькулятор не працював
+            //focusRequester.requestFocus()
             textFieldValue = textFieldValue.copy(selection = TextRange(FocusedItem.cursorStart))
             FocusedItem.changeNeeded = false
+            Log.d("MyTexts", "textFieldValue.selection.start:${textFieldValue.selection.start}; ")
         }
         textFieldValue = textFieldValue.copy(text = item.text)
         Log.d("Shit", "textFieldValue:${textFieldValue.text}; ")
@@ -1027,6 +1225,7 @@ fun TextPart(
             }
             FocusedItem.updateTopBar()
 
+            checkCalculate(textFieldValue, item)
             /*
             val selection = newValue.selection
             if (!selection.collapsed) {
