@@ -1,11 +1,20 @@
 package com.example.notemaster
 
+import android.R.attr.delay
+import kotlinx.coroutines.*
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
 // for Compose drawing
 import androidx.compose.ui.graphics.Path as AndroidPath
 // for Android Canvas bitmap saving
 import android.graphics.Path
+import android.net.Uri
+import androidx.compose.runtime.*
+import androidx.compose.ui.input.pointer.*
+import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,6 +57,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -56,11 +66,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import kotlinx.coroutines.Job
 import java.io.File
 import java.io.FileOutputStream
 import java.util.*
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 data class MyStroke(
@@ -71,7 +83,7 @@ data class MyStroke(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DrawingPage(navController: NavController) {
+fun DrawingPage(navController: NavController, existingImageUri: Uri? = null) {
     val context = LocalContext.current
 
     val strokes = remember { mutableStateListOf<MyStroke>() }
@@ -87,6 +99,25 @@ fun DrawingPage(navController: NavController) {
     var panY by remember { mutableStateOf(0f) }
 
     var isDrawing by remember { mutableStateOf(false) }
+
+    val drawingDebounceDelay = 100L // Adjust as needed
+    var drawingJob by remember { mutableStateOf<Job?>(null) }
+    var isPotentialDrawing by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope() // Add this line
+
+    val backgroundImage = remember { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(existingImageUri) {
+        existingImageUri?.let { uri ->
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                backgroundImage.value = BitmapFactory.decodeStream(inputStream)
+                inputStream?.close()
+            } catch (e: Exception) {
+                Log.e("DrawingPage", "Error loading background image: ${e.message}", e)
+            }
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets.statusBars.union(WindowInsets.navigationBars),
@@ -121,11 +152,18 @@ fun DrawingPage(navController: NavController) {
                         )
                     }
                     IconButton(onClick = {
-                        val file = saveDrawingToPng(context, strokes, panX, panY, scale, canvasSize.width, canvasSize.height)
-                        file?.let {
-                            navController.previousBackStackEntry
-                                ?.savedStateHandle
-                                ?.set("drawingPath", it.absolutePath)
+                        if (existingImageUri != null) {
+                            val savedUri = updateImageWithDrawing(context, existingImageUri, strokes)
+                            savedUri?.let {
+                                // Optionally, notify the user about successful save
+                            }
+                        } else {
+                            val file = saveDrawingToPng(context, strokes, panX, panY, scale, canvasSize.width, canvasSize.height)
+                            file?.let {
+                                navController.previousBackStackEntry
+                                    ?.savedStateHandle
+                                    ?.set("drawingPath", it.absolutePath)
+                            }
                         }
                         navController.popBackStack()
                     }) {
@@ -179,6 +217,10 @@ fun DrawingPage(navController: NavController) {
                 .padding(innerPadding)
                 .pointerInput(Unit) {
                     detectTransformGestures { centroid, pan, zoom, _ ->
+                        // Cancel any pending drawing
+                        drawingJob?.cancel()
+                        isPotentialDrawing = false;
+                        // ... handle transform gestures ...
                         // 1) compute the new scale
                         val newScale = scale * zoom
 
@@ -193,9 +235,16 @@ fun DrawingPage(navController: NavController) {
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { pos ->
-                            val scaledOffset = Offset((pos.x - panX) / scale, (pos.y - panY) / scale)
-                            currentPoints = listOf(scaledOffset)
-                            isDrawing = true
+                            // Start a coroutine to handle the delay
+                            drawingJob = coroutineScope.launch {  // Use coroutineScope here
+                                isPotentialDrawing = true
+                                delay(drawingDebounceDelay)
+                                if (isPotentialDrawing) { // Check if still a potential draw
+                                    val scaledOffset = Offset((pos.x - panX) / scale, (pos.y - panY) / scale)
+                                    currentPoints = listOf(scaledOffset)
+                                    isDrawing = true
+                                }
+                            }
                         },
                         onDrag = { change, _ ->
                             if (isDrawing) {
@@ -205,6 +254,8 @@ fun DrawingPage(navController: NavController) {
                             }
                         },
                         onDragEnd = {
+                            drawingJob?.cancel() // Cancel delay
+                            isPotentialDrawing = false
                             if (isDrawing) {
                                 strokes += MyStroke(currentPoints, selectedColor, strokeWidth / scale)
                                 currentPoints = emptyList()
@@ -212,6 +263,8 @@ fun DrawingPage(navController: NavController) {
                             }
                         },
                         onDragCancel = {
+                            drawingJob?.cancel()
+                            isPotentialDrawing = false
                             currentPoints = emptyList()
                             isDrawing = false
                         }
@@ -229,6 +282,10 @@ fun DrawingPage(navController: NavController) {
 
                 translate(left = scaledPanX, top = scaledPanY) {
                     scale(scaleX = scale, scaleY = scale, pivot = Offset(0f, 0f)) {
+                        // Draw the background image first
+                        backgroundImage.value?.let { image ->
+                            drawImage(image.asImageBitmap(), topLeft = Offset.Zero)
+                        }
                         strokes.forEach { stroke ->
                             drawSmoothPath(stroke.points, stroke.color, stroke.width)
                         }
@@ -346,5 +403,130 @@ fun saveDrawingToPng(
     } catch (e: Exception) {
         e.printStackTrace()
         return null
+    }
+}
+
+fun updateImageWithDrawing(
+    context: Context,
+    existingImageUri: Uri,
+    strokes: List<MyStroke>
+): Uri? {
+    // 1. Отримуємо файл із URI
+    val file = File(existingImageUri.path ?: return null)
+    val original = BitmapFactory.decodeFile(file.absolutePath)
+        ?.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+        ?: return null
+
+    // 2. Знаходимо межі штрихів
+    var minX = Float.MAX_VALUE
+    var minY = Float.MAX_VALUE
+    var maxX = Float.MIN_VALUE
+    var maxY = Float.MIN_VALUE
+
+    strokes.forEach { stroke ->
+        stroke.points.forEach { pt ->
+            minX = minOf(minX, pt.x)
+            minY = minOf(minY, pt.y)
+            maxX = maxOf(maxX, pt.x)
+            maxY = maxOf(maxY, pt.y)
+        }
+    }
+
+    // Якщо штрихи не виходять за межі — малюємо прямо на оригіналі
+    if (minX >= 0 && minY >= 0 && maxX <= original.width && maxY <= original.height) {
+        return drawStrokesOnBitmap(file, original, strokes)
+    }
+
+    // 3. Визначаємо, на скільки збільшити полотно
+    val leftExtend   = maxOf(0f,   -minX).roundToInt()
+    val topExtend    = maxOf(0f,   -minY).roundToInt()
+    val rightExtend  = maxOf(0f,   maxX - original.width).roundToInt()
+    val bottomExtend = maxOf(0f,   maxY - original.height).roundToInt()
+
+    val newW = original.width  + leftExtend + rightExtend
+    val newH = original.height + topExtend  + bottomExtend
+
+    // 4. Створюємо збільшене полотно
+    val enlarged = android.graphics.Bitmap.createBitmap(newW, newH, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(enlarged)
+    // фон (за потреби можна зробити transparent)
+    canvas.drawColor(android.graphics.Color.WHITE)
+
+    // 5. Малюємо оригінал зі зсувом
+    canvas.drawBitmap(original, leftExtend.toFloat(), topExtend.toFloat(), null)
+
+    // 6. Малюємо штрихи зі зсувом
+    val paint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    strokes.forEach { stroke ->
+        paint.color = stroke.color.toArgb()
+        paint.strokeWidth = stroke.width
+
+        val path = Path().apply {
+            moveTo(stroke.points[0].x + leftExtend, stroke.points[0].y + topExtend)
+            for (i in 1 until stroke.points.size) {
+                val prev = stroke.points[i - 1]
+                val curr = stroke.points[i]
+                val midX = (prev.x + curr.x) / 2f + leftExtend
+                val midY = (prev.y + curr.y) / 2f + topExtend
+                quadTo(prev.x + leftExtend, prev.y + topExtend, midX, midY)
+            }
+        }
+        canvas.drawPath(path, paint)
+    }
+
+    // 7. Перезаписуємо файл
+    return try {
+        FileOutputStream(file).use { out ->
+            enlarged.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+        }
+        existingImageUri
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
+// Виніс малювання без зміни розміру
+private fun drawStrokesOnBitmap(
+    file: File,
+    bitmap: android.graphics.Bitmap,
+    strokes: List<MyStroke>
+): Uri? {
+    val canvas = Canvas(bitmap)
+    val paint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    strokes.forEach { stroke ->
+        paint.color = stroke.color.toArgb()
+        paint.strokeWidth = stroke.width
+
+        val path = Path().apply {
+            moveTo(stroke.points[0].x, stroke.points[0].y)
+            for (i in 1 until stroke.points.size) {
+                val prev = stroke.points[i - 1]
+                val curr = stroke.points[i]
+                val midX = (prev.x + curr.x) / 2f
+                val midY = (prev.y + curr.y) / 2f
+                quadTo(prev.x, prev.y, midX, midY)
+            }
+        }
+        canvas.drawPath(path, paint)
+    }
+    return try {
+        FileOutputStream(file).use { out ->
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+        }
+        Uri.fromFile(file)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
     }
 }

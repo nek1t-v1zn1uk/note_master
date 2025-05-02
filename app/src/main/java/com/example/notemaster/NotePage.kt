@@ -341,6 +341,7 @@ class FocusedItem {
         var canCalculate = false
         var makeCalculations: () -> Unit = {}
         var updateCalculator: (Boolean) -> Unit = {}
+        lateinit var navController: NavController
     }
 }
 
@@ -349,6 +350,7 @@ class FocusedItem {
 fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
 
     FocusedItem.noteDao = noteDao
+    FocusedItem.navController = navController
 
     var note: Note by remember { mutableStateOf(Note()) }
 
@@ -1410,7 +1412,10 @@ fun ImagePart(
                         .border(1.dp, Color.Black, RoundedCornerShape(12.dp))
                 ) {
                     IconButton(
-                        onClick = {  },
+                        onClick = {
+                            menuExpanded = false
+                            FocusedItem.navController.navigate("drawing?imageUri=${item.uri.toString()}")
+                        },
                         modifier = Modifier
                             .size(width = 50.dp, height = 40.dp)
                     ) {

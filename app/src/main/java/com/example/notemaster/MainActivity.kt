@@ -133,8 +133,16 @@ fun MyApp() {
             val noteId = backStackEntry.arguments?.getInt("noteId")!!
             NotePage(noteDao, noteId, navController)
         }
-        composable("drawing") {
-            DrawingPage(navController)
+        composable(
+            route = "drawing?imageUri={imageUri}",
+            arguments = listOf(navArgument("imageUri") {
+                nullable = true
+                defaultValue = null
+                type = NavType.StringType
+            })
+        ) { backStackEntry ->
+            val imageUriString = backStackEntry.arguments?.getString("imageUri")
+            DrawingPage(navController = navController, existingImageUri = imageUriString?.let { Uri.parse(it) })
         }
         composable("profile") { HomeScreen(navController) }
     }
