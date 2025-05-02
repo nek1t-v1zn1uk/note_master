@@ -139,6 +139,7 @@ class ContentItemTypeAdapterFactory : TypeAdapterFactory {
         val itemTextAdapter = gson.getDelegateAdapter(this, TypeToken.get(ItemText::class.java))
         val itemCheckBoxAdapter = gson.getDelegateAdapter(this, TypeToken.get(ItemCheckBox::class.java))
         val itemImageAdapter = gson.getDelegateAdapter(this, TypeToken.get(ItemImage::class.java))
+        val itemFileAdapter = gson.getDelegateAdapter(this, TypeToken.get(ItemFile::class.java))
 
         @Suppress("UNCHECKED_CAST")
         val contentItemAdapter = object : TypeAdapter<ContentItem>() {
@@ -152,6 +153,7 @@ class ContentItemTypeAdapterFactory : TypeAdapterFactory {
                     is ItemText -> "ItemText"
                     is ItemCheckBox -> "ItemCheckBox"
                     is ItemImage -> "ItemImage"
+                    is ItemFile -> "ItemFile"
                     else -> throw IllegalArgumentException("Unknown type: ${value.javaClass}")
                 }
                 out.name("type").value(actualType)
@@ -160,6 +162,7 @@ class ContentItemTypeAdapterFactory : TypeAdapterFactory {
                     is ItemText -> itemTextAdapter.write(out, value)
                     is ItemCheckBox -> itemCheckBoxAdapter.write(out, value)
                     is ItemImage -> itemImageAdapter.write(out, value)
+                    is ItemFile -> itemFileAdapter.write(out, value)
                 }
                 out.endObject()
             }
@@ -184,6 +187,7 @@ class ContentItemTypeAdapterFactory : TypeAdapterFactory {
                     "ItemText" -> itemTextAdapter
                     "ItemCheckBox" -> itemCheckBoxAdapter
                     "ItemImage" -> itemImageAdapter
+                    "ItemFile" -> itemFileAdapter
                     else -> throw IllegalArgumentException("Unknown type: $type")
                 }
 

@@ -94,3 +94,10 @@ class ItemImage(
 ) : ContentItem() {
 
 }
+
+class ItemFile(
+    val uri: Uri,
+    val fileName: String
+) : ContentItem(){
+
+}

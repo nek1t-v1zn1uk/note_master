@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -35,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -145,6 +147,17 @@ fun OnKeyboardStartShowing(onStartShowing: () -> Unit) {
     }
 }
 
+fun getFileName(context: Context, uri: Uri): String {
+    val cursor = context.contentResolver.query(uri, null, null, null, null)
+    cursor?.use {
+        val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+        if (it.moveToFirst() && nameIndex >= 0) {
+            return it.getString(nameIndex)
+        }
+    }
+    return "unknown_file"
+}
+
 class FocusedItem {
     companion object {
         var indexInList: Int = 0
@@ -199,7 +212,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
         }
     }
 
-    //start of gallery-picker
+//start of gallery-picker
     var imageUri = remember { mutableStateOf<Uri?>(null) }
     val waitingForImage = remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -282,9 +295,9 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
         }
     }
 
-    //end gallery-picker
+//end gallery-picker
 
-    //start of camera
+// start of camera
     var photoUri by remember { mutableStateOf<Uri?>(null) }
     var cameraImagePath by remember { mutableStateOf<Uri?>(null) }
     var waitingForCameraPhoto by remember { mutableStateOf(false) }
@@ -396,9 +409,9 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
             // else: Show a dialog or snack
         }
     )
-    //end of camera
+//end of camera
 
-    //start of drawing
+//start of drawing
     // 1) Get the current NavBackStackEntry as Compose State
     val backStackEntry by navController.currentBackStackEntryAsState()
 
@@ -469,7 +482,69 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
             Log.d("MyData", "test8")
         }
     }
-    //end of drawing
+//end of drawing
+
+//start of file picking
+    val fileUri = remember { mutableStateOf<Uri?>(null) }
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri ->
+            uri?.let {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                fileUri.value = it
+            }
+        }
+    )
+
+    fun openFilePicker() {
+        filePickerLauncher.launch(arrayOf("*/*")) // Allow all types
+    }
+
+    LaunchedEffect(fileUri.value) {
+        fileUri.value?.let { uri ->
+            val fileName = getFileName(context, uri)
+            val newFileItem = ItemFile(uri, fileName)
+
+            var item = note.content.list[FocusedItem.indexInList]
+            if(item is ItemText) {
+                var indexInListOfNewImage = -1
+
+                if (FocusedItem.indexInItem == 0) {
+                    indexInListOfNewImage = FocusedItem.indexInList
+                    FocusedItem.indexInList++
+                    Log.d("Pictures", "Set FocusedItem.indexInList: ${FocusedItem.indexInList}")
+                } else if (FocusedItem.indexInItem == item.text.length) {
+                    indexInListOfNewImage = FocusedItem.indexInList + 1
+                    if (FocusedItem.indexInList == note.content.list.size - 1)
+                        note.content.addComponent(
+                            FocusedItem.indexInList + 1,
+                            ItemText("")//, style = item.style)
+                        )
+                } else {
+                    indexInListOfNewImage = FocusedItem.indexInList + 1
+                    var firstText = item.text.substring(0, FocusedItem.indexInItem)
+                    var secondText = item.text.substring(FocusedItem.indexInItem)
+                    item.text = firstText
+                    note.content.addComponent(
+                        FocusedItem.indexInList + 1,
+                        ItemText(secondText)
+                    )
+                    FocusedItem.updateValue(firstText)
+                }
+
+                note.content.addComponent(
+                    indexInListOfNewImage,
+                    newFileItem
+                )
+                note.lastEdit = LocalDateTime.now()
+            }
+
+        }
+    }
+//end of file picking
 
     Scaffold(
         containerColor = Color.White,
@@ -586,8 +661,24 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                                         .size(36.dp)
                                 )
                             }
-                            //checkbox
+                            //file picker
                             IconButton(
+                                onClick = {
+                                    openFilePicker()
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AttachFile,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                )
+                            }
+                            //checkbox
+                            /*IconButton(
                                 onClick = {
                                     val item = note.content.list.get(FocusedItem.indexInList)
                                     if (item is ItemText) {
@@ -644,7 +735,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                                     modifier = Modifier
                                         .size(36.dp)
                                 )
-                            }
+                            }*/
                             //highlight(temporary camera)
                             /*IconButton(
                                 onClick = {
@@ -725,59 +816,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
             Modifier
                 .padding(innerPadding)
         )
-    } /* { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-        ) {
-            TextField(
-                value = name,
-                onValueChange = { name = it },
-                placeholder = { Text("Назва", fontSize = 24.sp) },
-                singleLine = true,
-                textStyle = TextStyle(fontSize = 24.sp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedPlaceholderColor = Color.LightGray,
-                    unfocusedPlaceholderColor = Color.LightGray,
-                )
-            )
-//            note.lastEdit = note.lastEdit.withYear(2024)
-            var format = "dd MMMM HH:mm"
-            if(note.lastEdit.year != LocalDateTime.now().year)
-                format = "dd MMMM yyyy HH:mm"
-            Text(
-                text = note.lastEdit.format(DateTimeFormatter.ofPattern(format, Locale("uk"))) +
-                        " | ${text.count { !it.isWhitespace() }} символ(-ів)",
-                color = Color.Gray,
-                modifier = Modifier
-                    .padding(start = 14.dp)
-            )
-
-            TextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text("Type here...") },
-                singleLine = false,
-                textStyle = TextStyle(fontSize = 18.sp),
-                maxLines = Int.MAX_VALUE,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    disabledContainerColor = Color.White,
-                    errorContainerColor = Color.Red,
-                    focusedPlaceholderColor = Color.LightGray,
-                    unfocusedPlaceholderColor = Color.LightGray,
-                ),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .heightIn(min = 0.dp)
-            )
-        }
-    }*/
+    }
 }
 
 
@@ -866,51 +905,19 @@ fun NoteContent(
                                 }
                         )
                     }
-                }
-            }
 
-
-            /*
-        var content: MutableList<ContentItem> = note.content.list
-
-        var remainingHeight = with(density) { lazyColumnHeightPx.toDp() }
-
-        items(content.size) { index ->
-            val focusRequester = remember { FocusRequester() }
-            var modifierPart: Modifier = Modifier
-
-            val item = content[index]
-
-            if(item is ItemText) {
-                if(item is ItemCheckBox){
-                    CheckBoxPart(
-                        item.text,
-                        item.hasCheckBox,
-                        index,
-                        focusRequester
-                    )
-                }
-                else {
-                    if(index == content.lastIndex){
-                        modifierPart = modifierPart.heightIn(min = remainingHeight)
+                    is ItemFile -> {
+                        FilePart(
+                            item = item,
+                            modifier = Modifier
+                                .onGloballyPositioned { coords ->
+                                    lazyColumnHeightPx -= coords.size.height
+                                }
+                        )
                     }
-
-                    TextPart(
-                        item.text,
-                        index,
-                        focusRequester,
-                        modifierPart.fillMaxSize()
-                    )
                 }
             }
-            else if(item is ItemImage){
-                Image(
-                    painter = rememberAsyncImagePainter(item.uri),
-                    contentDescription = null,
-                    modifier = Modifier.size(200.dp)
-                )
-            }
-        }*/
+
         }
     }
 }
@@ -1268,6 +1275,51 @@ fun getImageSize(context: Context, uri: Uri): Pair<Int, Int>? {
     }
 }
 
+@Composable
+fun FilePart(
+    item: ItemFile,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 5.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFFF2F2F2))
+            .border(1.dp, Color.Black, RoundedCornerShape(8.dp))
+            .clickable {
+                val fallbackType = when {
+                    item.fileName.endsWith(".pdf", true) -> "application/pdf"
+                    item.fileName.endsWith(".doc", true) || item.fileName.endsWith(".docx", true) -> "application/msword"
+                    item.fileName.endsWith(".txt", true) -> "text/plain"
+                    else -> "*/*"
+                }
+                val mimeType = context.contentResolver.getType(item.uri) ?: fallbackType
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(item.uri, mimeType)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+
+                val chooser = Intent.createChooser(intent, "Відкрити файл")
+
+                // Check if there is at least one app that can handle this intent
+                val resolveInfos = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                if (resolveInfos.isNotEmpty()) {
+                    context.startActivity(chooser)
+                } else {
+                    Toast.makeText(context, "Немає додатків для відкриття цього файлу", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .padding(12.dp)
+    ) {
+        Text(
+            text = "📄 ${item.fileName}",
+            color = Color.Black,
+            fontSize = 16.sp
+        )
+    }
+}
 
 
 @Preview(wallpaper = Wallpapers.NONE)
