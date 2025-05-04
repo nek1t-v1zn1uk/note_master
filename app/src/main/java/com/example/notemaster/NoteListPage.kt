@@ -140,7 +140,7 @@ var chosenItems: MutableList<Int> = mutableStateListOf()
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteList(navController: NavController, noteDao: NoteDao){
-
+    var context = LocalContext.current
     val list = remember { mutableStateListOf<Note>() }
 
     LaunchedEffect(Unit) {
@@ -185,9 +185,10 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                     .padding(end = 20.dp)
                                     .clickable(onClick = {
                                         CoroutineScope(Dispatchers.IO).launch {
-                                            for(id in chosenItems)
+                                            for(id in chosenItems) {
                                                 noteDao.deleteNoteById(id)
-
+                                                cancelNotification(context, id.hashCode())
+                                            }
                                             val updatedNotes = noteDao.getAllNotesOnce()
                                             withContext(Dispatchers.Main) {
                                                 list.clear()
@@ -419,11 +420,13 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                         verticalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier
                             .fillMaxSize()
+                            .padding(end = 50.dp)
                     ){
                         Text(
                             text = item.name,
                             fontSize = 18.sp,
-                            color = Color.Black
+                            color = Color.Black,
+                            maxLines = 2
                         )
 
                         Text(

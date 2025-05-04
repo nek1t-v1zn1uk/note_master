@@ -25,8 +25,9 @@ import java.time.format.DateTimeFormatter
 data class NoteEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val name: String,
-    val content: Content, // Stored via TypeConverter
-    val lastEdit: LocalDateTime // Stored via TypeConverter
+    val content: Content,           // TypeConverter
+    val lastEdit: LocalDateTime,    // TypeConverter
+    val reminder: Reminder? = null  // ← нове поле
 )
 
 // ----------------------------
@@ -72,6 +73,15 @@ class Converters {
 
     @TypeConverter
     fun toUri(uriString: String): Uri = Uri.parse(uriString)
+
+    // Reminder <-> String
+    @TypeConverter
+    fun fromReminder(reminder: Reminder?): String? =
+        reminder?.let { gson.toJson(it) }
+
+    @TypeConverter
+    fun toReminder(data: String?): Reminder? =
+        data?.let { gson.fromJson(it, Reminder::class.java) }
 }
 
 // ----------------------------
@@ -102,7 +112,7 @@ interface NoteDao {
 // ----------------------------
 // DATABASE
 // ----------------------------
-@Database(entities = [NoteEntity::class], version = 4)
+@Database(entities = [NoteEntity::class], version = 5)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
@@ -118,7 +128,8 @@ fun NoteEntity.toNote(): Note {
         id = this.id,
         name = this.name,
         content = this.content,
-        lastEdit = this.lastEdit
+        lastEdit = this.lastEdit,
+        initialReminder = this.reminder
     )
 }
 
@@ -128,7 +139,8 @@ fun Note.toEntity(): NoteEntity {
         id = this.id,
         name = this.name,
         content = this.content,
-        lastEdit = this.lastEdit
+        lastEdit = this.lastEdit,
+        reminder = this.reminder
     )
 }
 

@@ -1,6 +1,7 @@
 package com.example.notemaster
 
 import android.R
+import android.icu.util.Calendar
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -30,6 +31,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -145,6 +147,13 @@ fun MyApp() {
             DrawingPage(navController = navController, existingImageUri = imageUriString?.let { Uri.parse(it) })
         }
         composable("profile") { HomeScreen(navController) }
+    }
+
+    NotificationHelper.createChannel(context)
+    NotificationPermissionRequester { }
+    LaunchedEffect(Unit) {
+        requestIgnoreBatteryOptimizations(context)
+        requestExactAlarmsPermission(context)
     }
 }
 

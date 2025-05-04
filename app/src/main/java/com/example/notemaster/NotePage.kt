@@ -1,16 +1,22 @@
 package com.example.notemaster
 
 import android.Manifest
+import android.app.DatePickerDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import java.util.Calendar
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresPermission
+import androidx.appcompat.app.AlertDialog
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,6 +27,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,20 +51,30 @@ import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.OpenWith
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,6 +95,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.Wallpapers
 import androidx.compose.ui.unit.IntOffset
@@ -85,6 +103,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
@@ -98,11 +117,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.LinkedList
 import java.util.Locale
 import java.util.Stack
+import kotlin.hashCode
 import kotlin.math.max
 
 
@@ -156,7 +179,7 @@ fun OnKeyboardStartShowing(onStartShowing: () -> Unit) {
 fun getFileName(context: Context, uri: Uri): String {
     val cursor = context.contentResolver.query(uri, null, null, null, null)
     cursor?.use {
-        val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+        val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
         if (it.moveToFirst() && nameIndex >= 0) {
             return it.getString(nameIndex)
         }
@@ -345,6 +368,40 @@ class FocusedItem {
     }
 }
 
+@Composable
+fun NotificationPermissionRequester(onGranted: () -> Unit) {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            onGranted()
+        } else {
+            Toast.makeText(context, "Дозвіл на сповіщення відхилено", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Викликаємо запит десь в UI, наприклад при завантаженні екрана або по кнопці
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Перевіряємо, чи вже є дозвіл
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                // Запитуємо дозвіл
+                launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                onGranted()
+            }
+        } else {
+            onGranted()
+        }
+    }
+}
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
@@ -369,6 +426,9 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
         //Log.d("Shit", "textLaunched:${(note.content.list[0] as ItemText).text}; nodeId:${noteId}")
     }
     note.content.ensureTrailingText()
+
+    val context = LocalContext.current
+
     var isKeyboard by remember { mutableStateOf(false) }
 
     val focusManager = LocalFocusManager.current
@@ -389,7 +449,6 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
 //start of gallery-picker
     var imageUri = remember { mutableStateOf<Uri?>(null) }
     val waitingForImage = remember { mutableStateOf(false) }
-    val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri ->
@@ -505,7 +564,6 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
             }
         }
     )
-
 
     fun openCamera() {
         val uri = createCameraImageUri()
@@ -769,6 +827,92 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             tint = Color.Black,
                             contentDescription = null
+                        )
+                    }
+                },
+                actions = {
+                    var expanded by remember { mutableStateOf(false) }
+                    var showDatePicker by remember { mutableStateOf(false) }
+                    var selectedDateMillis: Long? by remember { mutableStateOf(0) }
+                    IconButton(
+                        onClick = {
+                            expanded = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = null
+                        )
+                    }
+                    if(showDatePicker){
+                        DateTimePickerModal(
+                            onDateTimeSelected = { millis ->
+                                selectedDateMillis = millis
+                                note.reminder = Reminder(
+                                    Instant.ofEpochMilli(millis!!)
+                                        .atZone(ZoneId.systemDefault())
+                                        .toLocalDateTime()
+                                )
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    noteDao.update(note.toEntity())
+                                }
+
+                                cancelNotification(context, note.id.hashCode())
+                                scheduleNotification(
+                                    context = context,
+                                    notificationId = note.id.hashCode(),
+                                    title = "Нагадування: ${note.name}",
+                                    text = if(note.reminder!!.descrition.trim() == "") "Перегляньте нотатку." else note.reminder!!.descrition,
+                                    triggerAtMillis = millis
+                                )
+
+                                FocusedItem.updateTopBar()
+                            },
+                            onDismiss = { showDatePicker = false },
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        containerColor = Color.White
+                    ) {
+                        if(note.hasReminder()){
+                            DropdownMenuItem(
+                                text = { Text("Видалити нагадування") },
+                                onClick = {
+                                    expanded = false
+                                    note.reminder = null
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        noteDao.update(note.toEntity())
+                                    }
+                                    cancelNotification(context, note.id.hashCode())
+                                    FocusedItem.updateTopBar()
+                                }
+                            )
+                        }
+                        else {
+                            DropdownMenuItem(
+                                text = { Text("Добавити нагадування") },
+                                onClick = {
+                                    expanded = false
+                                    showDatePicker = true
+                                }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("Ше шось треба") },
+                            onClick = {
+                                expanded = false
+                            }
+                        )
+                        Divider(
+                            color = Color.Black
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Дівайдер??") },
+                            onClick = {
+                                expanded = false
+                            }
                         )
                     }
                 }
@@ -1142,7 +1286,7 @@ fun NoteContent(
 
 @Composable
 fun NoteContentTop(note: Note, modifier: Modifier = Modifier){
-
+    var context = LocalContext.current
     var nameValue = note.name // by remember { mutableStateOf(note.name) }
     var dateValue = note.lastEdit //by remember { mutableStateOf(note.lastEdit) }
     var symbolCount = note.content.getSymbolsCount() //by remember { mutableStateOf(note.content.getSymbolsCount()) }
@@ -1154,7 +1298,6 @@ fun NoteContentTop(note: Note, modifier: Modifier = Modifier){
     LaunchedEffect(refreshTrigger) {
         Log.d("Mmm", "mmm")
     }
-
     Column(
         modifier = modifier
     ) {
@@ -1165,6 +1308,17 @@ fun NoteContentTop(note: Note, modifier: Modifier = Modifier){
                 note.name = it
                 note.lastEdit = LocalDateTime.now()
                 FocusedItem.updateTopBar()
+
+                if(note.hasReminder()){
+                    cancelNotification(context, note.id.hashCode())
+                    scheduleNotification(
+                        context = context,
+                        notificationId = note.id.hashCode(),
+                        title = "Нагадування: ${note.name}",
+                        text = if(note.reminder!!.descrition.trim() == "") "Перегляньте нотатку." else note.reminder!!.descrition,
+                        triggerAtMillis = note.reminder!!.date.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    )
+                }
             },
             placeholder = { Text("Назва", fontSize = 24.sp) },
             singleLine = true,
@@ -1176,7 +1330,15 @@ fun NoteContentTop(note: Note, modifier: Modifier = Modifier){
                 unfocusedIndicatorColor = Color.Transparent,
                 focusedPlaceholderColor = Color.LightGray,
                 unfocusedPlaceholderColor = Color.LightGray,
-            )
+                cursorColor = Color(red = 100, green = 100, blue = 255),
+                selectionColors = TextSelectionColors(
+                    handleColor = Color(red = 100, green = 100, blue = 255),
+                    backgroundColor = Color(red = 100, green = 100, blue = 255, alpha = 100),
+                ),
+                disabledIndicatorColor = Color(red = 100, green = 100, blue = 255),
+                errorIndicatorColor = Color(red = 100, green = 100, blue = 255),
+
+                )
         )
 //  note.lastEdit = note.lastEdit.withYear(2024)
         var format = "dd MMMM HH:mm"
@@ -1194,6 +1356,89 @@ fun NoteContentTop(note: Note, modifier: Modifier = Modifier){
             modifier = Modifier
                 .padding(start = 14.dp)
         )
+
+        if(note.hasReminder()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(2.dp,  Color(red = 100, green = 100, blue = 255), RoundedCornerShape(8.dp))
+                    .background(Color(red = 100, green = 100, blue = 255, alpha = 40))
+            ) {
+                var showDatePicker by remember { mutableStateOf(false) }
+                if(showDatePicker){
+                    DateTimePickerModal(
+                        onDateTimeSelected = { millis ->
+                            note.reminder!!.date = Instant.ofEpochMilli(millis!!).atZone(ZoneId.systemDefault()).toLocalDateTime()
+
+                            CoroutineScope(Dispatchers.IO).launch {
+                                FocusedItem.noteDao.update(note.toEntity())
+                            }
+
+                            cancelNotification(context, note.id.hashCode())
+                            scheduleNotification(
+                                context = context,
+                                notificationId = note.id.hashCode(),
+                                title = "Нагадування: ${note.name}",
+                                text = if(note.reminder!!.descrition.trim() == "") "Перегляньте нотатку." else note.reminder!!.descrition,
+                                triggerAtMillis = millis
+                            )
+
+                            FocusedItem.updateTopBar()
+                        },
+                        onDismiss = { showDatePicker = false },
+                    )
+                }
+                val format = "dd.MM.yyyy\nHH:mm"
+                Text(
+                    text = note.reminder!!.date.format(DateTimeFormatter.ofPattern(format)),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .padding(horizontal = 14.dp)
+                        .fillMaxHeight()
+                        .clickable(onClick = {
+                            showDatePicker = true
+                        })
+                )
+                var descriptionValue by remember { mutableStateOf(note.reminder!!.descrition) }
+                TextField(
+                    value = descriptionValue,
+                    onValueChange = {
+                        descriptionValue = it
+                        note.reminder!!.descrition = it
+
+                        cancelNotification(context, note.id.hashCode())
+                        scheduleNotification(
+                            context = context,
+                            notificationId = note.id.hashCode(),
+                            title = "Нагадування: ${note.name}",
+                            text = if(note.reminder!!.descrition.trim() == "") "Перегляньте нотатку." else note.reminder!!.descrition,
+                            triggerAtMillis = note.reminder!!.date.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                        )
+                    } ,
+                    placeholder = { Text("Опис...") },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedPlaceholderColor = Color.LightGray,
+                        unfocusedPlaceholderColor = Color.LightGray,
+                        cursorColor = Color(red = 100, green = 100, blue = 255),
+                        selectionColors = TextSelectionColors(
+                            handleColor = Color(red = 100, green = 100, blue = 255),
+                            backgroundColor = Color(red = 100, green = 100, blue = 255, alpha = 100),
+                        ),
+                        disabledIndicatorColor = Color(red = 100, green = 100, blue = 255),
+                        errorIndicatorColor = Color(red = 100, green = 100, blue = 255),
+
+                        ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                )
+            }
+        }
     }
 
 }
@@ -1625,6 +1870,73 @@ fun FilePart(
     }
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DateTimePickerModal(
+    onDateTimeSelected: (Long?) -> Unit,
+    onDismiss: () -> Unit,
+    initialTime: Long? = null
+) {
+    // Флаг показу діалогу дати/часу
+    var step by remember { mutableStateOf(0) }
+    // Мілісекунди обраної дати (00:00)
+    var pickedDateMillis by remember { mutableStateOf<Long?>(initialTime ?: System.currentTimeMillis()) }
+
+
+    // 1) Крок 0 — показуємо DatePicker
+    if (step == 0) {
+        val dateState = rememberDatePickerState(
+            initialSelectedDateMillis = pickedDateMillis
+        )
+        androidx.compose.material3.DatePickerDialog(
+            onDismissRequest = onDismiss,
+            confirmButton = {
+                TextButton(onClick = {
+                    pickedDateMillis = dateState.selectedDateMillis
+                    step = 1             // переходимо до вибору часу
+                }) { Text("Далі") }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("Скасувати") }
+            }
+        ) {
+            DatePicker(state = dateState)
+        }
+    }
+
+    // 2) Крок 1 — показуємо TimePicker
+    if (step == 1 && pickedDateMillis != null) {
+
+        val timeState = rememberTimePickerState(
+            initialHour = 0,
+            initialMinute = 0,
+            is24Hour = true
+        )
+
+        AlertDialog(
+            text = {
+                TimePicker(state = timeState)
+            },
+            onDismissRequest = onDismiss,
+            confirmButton = {
+                TextButton(onClick = {
+                    // обчислюємо фінальний час: додаємо години й хвилини до дати
+                    val pickedCalendar = Calendar.getInstance().apply {
+                        timeInMillis = pickedDateMillis!!
+                        set(Calendar.HOUR_OF_DAY, timeState.hour)
+                        set(Calendar.MINUTE, timeState.minute)
+                    }
+                    onDateTimeSelected(pickedCalendar.timeInMillis)
+                    onDismiss()
+                }) { Text("Готово") }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("Скасувати") }
+            }
+        )
+    }
+}
 
 @Preview(wallpaper = Wallpapers.NONE)
 @Composable

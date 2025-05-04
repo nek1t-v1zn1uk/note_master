@@ -13,6 +13,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import androidx.annotation.RequiresPermission
@@ -51,10 +52,15 @@ object NotificationHelper {
 class ReminderReceiver : BroadcastReceiver() {
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     override fun onReceive(context: Context, intent: Intent) {
-        // Витягуємо дані з Intent
+        // спочатку переконаємося, що маємо дозвіл
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED) return
+
         val title = intent.getStringExtra("title") ?: "Нагадування"
         val text  = intent.getStringExtra("text")  ?: ""
-        // Будуємо та показуємо Notification
         val notification = NotificationHelper.buildNotification(context, title, text)
         NotificationManagerCompat.from(context)
             .notify(intent.getIntExtra("id", 0), notification)
@@ -71,15 +77,7 @@ fun scheduleNotification(
 ) {
     NotificationHelper.createChannel(context)
 
-    // 1) Check POST_NOTIFICATIONS (Android 13+)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS
-        ) != PackageManager.PERMISSION_GRANTED
-    ) return
-
-    // 2) Build the PendingIntent
+    // 1) Створюємо Intent і PendingIntent
     val intent = Intent(context, ReminderReceiver::class.java).apply {
         putExtra("id", notificationId)
         putExtra("title", title)
@@ -92,38 +90,79 @@ fun scheduleNotification(
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    // 3) Grab the AlarmManager
+    // 2) Отримуємо AlarmManager
     val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-    // 3a) On Android 12+ we **must** check exact-alarm capability:
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (!am.canScheduleExactAlarms()) {
-            // 3b) Redirect user into the “Exact alarms” settings page
-            val req = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                data = Uri.parse("package:${context.packageName}")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(req)
-            return
-        }
+    // 3) (Android S+) перевіряємо і, за необхідності, відкриваємо діалог Exact Alarms
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
+        context.startActivity(
+            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                .apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+        )
+        // але НЕ робимо return — даємо користувачу можливість самотужки ввімкнути…
     }
 
-    // 4) Finally schedule the one-off exact alarm
-    try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            am.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pi
-            )
-        } else {
-            am.setExact(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pi
+    // 4) Ставимо будильник навіть якщо немає POST_NOTIFICATIONS
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        am.setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            triggerAtMillis,
+            pi
+        )
+    } else {
+        am.setExact(
+            AlarmManager.RTC_WAKEUP,
+            triggerAtMillis,
+            pi
+        )
+    }
+}
+
+fun cancelNotification(context: Context, notificationId: Int) {
+    // Відтворюємо той же PendingIntent, який використовували для schedule
+    val intent = Intent(context, ReminderReceiver::class.java)
+    val pi = PendingIntent.getBroadcast(
+        context,
+        notificationId,
+        intent,
+        PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+    ) ?: return  // якщо PendingIntent не знайдено — нічого не скасовуємо
+
+    // Отримуємо AlarmManager і скасовуємо
+    val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    am.cancel(pi)
+
+    // Також відмічаємо сам PendingIntent як скасований
+    pi.cancel()
+}
+
+
+// 2) Функція для запиту оптимізацій батареї
+fun requestIgnoreBatteryOptimizations(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!pm.isIgnoringBatteryOptimizations(context.packageName)) {
+            context.startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    .apply { data = Uri.parse("package:${context.packageName}") }
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }
-    } catch (e: SecurityException) {
-        Log.e("Reminder", "Failed to schedule exact alarm", e)
+    }
+}
+
+// 3) Функція для запиту точних будильників (Android 12+)
+fun requestExactAlarmsPermission(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val am = context.getSystemService(AlarmManager::class.java)
+        if (!am.canScheduleExactAlarms()) {
+            context.startActivity(
+                Intent("android.app.action.REQUEST_SCHEDULE_EXACT_ALARM")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
     }
 }

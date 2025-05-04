@@ -4,6 +4,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.unit.dp
 import java.time.LocalDateTime
 import java.util.Dictionary
@@ -12,9 +13,17 @@ class Note(
     var id: Int = 0,
     var name: String = "NaMe",
     var content: Content = Content(),
-    var lastEdit: LocalDateTime = LocalDateTime.now()
+    var lastEdit: LocalDateTime = LocalDateTime.now(),
+    initialReminder: Reminder? = null
 ){
-
+    var reminder: Reminder? = initialReminder
+        set(value){
+            field = value
+            lastEdit = LocalDateTime.now()
+        }
+    fun hasReminder(): Boolean{
+        return reminder != null
+    }
 }
 
 class Content(
@@ -101,3 +110,8 @@ class ItemFile(
 ) : ContentItem(){
 
 }
+
+class Reminder(
+    var date: LocalDateTime,
+    var descrition: String = ""
+)
