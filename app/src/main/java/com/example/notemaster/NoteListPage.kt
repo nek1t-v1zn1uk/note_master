@@ -3,7 +3,9 @@ package com.example.notemaster
 import android.R
 import android.R.attr.delay
 import android.app.Activity
+import android.app.AlertDialog
 import android.util.Log
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -93,9 +95,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.appcompat.app.AppCompatActivity
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import java.time.format.DateTimeFormatter
@@ -140,7 +148,11 @@ var chosenItems: MutableList<Int> = mutableStateListOf()
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteList(navController: NavController, noteDao: NoteDao){
-    var context = LocalContext.current
+    val context = LocalContext.current
+    val activity = remember(context) { context as AppCompatActivity }
+
+    var isSecret by remember { mutableStateOf(false) }
+
     val list = remember { mutableStateListOf<Note>() }
 
     LaunchedEffect(Unit) {
@@ -166,9 +178,101 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
             Column {
                 TopAppBar(
                     title = {
+                        var showDialog by remember { mutableStateOf(false) }
                         Text(
-                            text = "Нотатки"
+                            text = "Нотатки" + if(isSecret) "\uD83D\uDD12" else "",
+                            modifier = Modifier
+                                .clickable(onClick = {
+                                    if(isSecret) {
+                                        isSecret = false
+                                    }
+                                    else{
+                                        val biometricManager = BiometricManager.from(context)
+                                        when (biometricManager.canAuthenticate(
+                                            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                                                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                                        )) {
+                                            BiometricManager.BIOMETRIC_SUCCESS -> {
+                                                // 1) Підготовка PromptInfo з дозвілом на резервний системний PIN/пароль
+                                                val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                                                    .setTitle("Авторизація")
+                                                    .setSubtitle("Підтвердіть особу")
+                                                    // якщо пристрій не має біометрії або користувач хоче, можна ввійти через системний PIN/пароль
+                                                    .setAllowedAuthenticators(
+                                                        BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                                                                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                                                    )
+                                                    .build()
+
+                                                // 2) Створюємо BiometricPrompt
+                                                val executor = ContextCompat.getMainExecutor(context)
+                                                val biometricPrompt = BiometricPrompt(
+                                                    activity, executor,
+                                                    object : BiometricPrompt.AuthenticationCallback() {
+                                                        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                                            super.onAuthenticationSucceeded(result)
+
+                                                            isSecret = true
+                                                        }
+
+                                                        override fun onAuthenticationError(
+                                                            errorCode: Int,
+                                                            errString: CharSequence
+                                                        ) {
+                                                            super.onAuthenticationError(
+                                                                errorCode,
+                                                                errString
+                                                            )
+                                                            // Обробка помилок (наприклад, багато безуспішних спроб)
+                                                        }
+
+                                                        override fun onAuthenticationFailed() {
+                                                            super.onAuthenticationFailed()
+                                                            // Не розпізнано відбиток/обличчя
+                                                        }
+                                                    }
+                                                )
+
+                                                // 3) Запускаємо
+                                                biometricPrompt.authenticate(promptInfo)
+                                            }
+
+                                            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
+                                                // немає біометричного датчика
+                                                isSecret = true
+                                            }
+
+                                            BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> {
+                                                // датчик тимчасово недоступний
+                                                showDialog = true
+                                            }
+
+                                            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
+                                                // не налаштований жоден відбиток/обличчя — можна запропонувати поставити пароль
+                                                isSecret = true
+                                            }
+                                        }
+                                    }
+                                })
                         )
+                        if (showDialog) {
+                            androidx.compose.material3.AlertDialog(
+                                onDismissRequest = {
+                                    showDialog = false
+                                },
+                                title = {
+                                    Text(text = "Помилка")
+                                },
+                                text = {
+                                    Text("Перевірка біометрії/паролю тимчасово недоступна. Спробуйте пізніше")
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = { showDialog = false }) {
+                                        Text("ОК")
+                                    }
+                                }
+                            )
+                        }
                     },
                     colors = topAppBarColors(
                         containerColor = Color.White,
@@ -185,7 +289,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                     .padding(end = 20.dp)
                                     .clickable(onClick = {
                                         CoroutineScope(Dispatchers.IO).launch {
-                                            for(id in chosenItems) {
+                                            for (id in chosenItems) {
                                                 noteDao.deleteNoteById(id)
                                                 cancelNotification(context, id.hashCode())
                                             }
@@ -301,7 +405,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                 containerColor = Color(red = 100, green = 100, blue = 255),
                 contentColor = Color.Black,
                 onClick = {
-                    var newNote = Note()
+                    var newNote = Note(isSecret = isSecret)
                     newNote.content.ensureTrailingText()
                     list.add(newNote)
                     CoroutineScope(Dispatchers.IO).launch {
@@ -336,12 +440,14 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                     color = Color.White
                 )
             }
-            items(
-                count = list.size,
-                key = { list[it].id }
-            ){ index ->
-                var item = list[index]
 
+            val filtered = list.filter { it.isSecret == isSecret }
+
+            items(
+                count = filtered.size,
+                key = { filtered[it].id }
+            ){ index ->
+                var item = filtered[index]
                 var isPressed by remember { mutableStateOf(false) }
                 val fastInSlowOut = tween<Float>(
                     durationMillis = 300,
@@ -357,7 +463,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                 )
 
                 var isChecked by remember { mutableStateOf(false) }
-                if(!isCheckState)
+                if (!isCheckState)
                     isChecked = false
 
                 Box(
@@ -375,7 +481,10 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                             spotColor = Color.Black.copy(alpha = 1f),
                             clip = true
                         )
-                        .background(if(!isChecked)Color.White else Color.LightGray, RoundedCornerShape(16.dp))
+                        .background(
+                            if (!isChecked) Color.White else Color.LightGray,
+                            RoundedCornerShape(16.dp)
+                        )
                         .padding(top = 20.dp, bottom = 10.dp, start = 15.dp, end = 15.dp)
                         .pointerInput(Unit) {
                             coroutineScope {
@@ -386,7 +495,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                         // Launch coroutine to detect long press
                                         val longPressJob = launch {
                                             delay(500)
-                                            if(scale==0.90f)
+                                            if (scale == 0.90f)
                                                 isCheckState = true
                                         }
 
@@ -394,15 +503,14 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
 
                                         if (released) {
                                             longPressJob.cancel()
-                                            if(isCheckState) {
+                                            if (isCheckState) {
                                                 isChecked = !isChecked
-                                                if(isChecked){
+                                                if (isChecked) {
                                                     chosenItems.add(item.id)
-                                                }
-                                                else{
+                                                } else {
                                                     chosenItems.remove(item.id)
                                                 }
-                                            } else{
+                                            } else {
                                                 Log.d("NavArgs", "index: ${list.indexOf(item)}")
                                                 // use the actual primary key, not the list position
                                                 navController.navigate("note_page/${item.id}")
@@ -416,12 +524,12 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                         }
 
                 ) {
-                    Column (
+                    Column(
                         verticalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(end = 50.dp)
-                    ){
+                    ) {
                         Text(
                             text = item.name,
                             fontSize = 18.sp,
@@ -442,7 +550,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                     }
 
 
-                    if(isCheckState) {
+                    if (isCheckState) {
                         Box(
                             contentAlignment = Alignment.CenterEnd,
                             modifier = Modifier

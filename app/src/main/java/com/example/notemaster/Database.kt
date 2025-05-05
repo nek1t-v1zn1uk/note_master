@@ -27,7 +27,8 @@ data class NoteEntity(
     val name: String,
     val content: Content,           // TypeConverter
     val lastEdit: LocalDateTime,    // TypeConverter
-    val reminder: Reminder? = null  // ← нове поле
+    val reminder: Reminder? = null,
+    val isSecret: Boolean
 )
 
 // ----------------------------
@@ -112,7 +113,7 @@ interface NoteDao {
 // ----------------------------
 // DATABASE
 // ----------------------------
-@Database(entities = [NoteEntity::class], version = 5)
+@Database(entities = [NoteEntity::class], version = 6)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
@@ -129,7 +130,8 @@ fun NoteEntity.toNote(): Note {
         name = this.name,
         content = this.content,
         lastEdit = this.lastEdit,
-        initialReminder = this.reminder
+        initialReminder = this.reminder,
+        isSecret = this.isSecret
     )
 }
 
@@ -140,7 +142,8 @@ fun Note.toEntity(): NoteEntity {
         name = this.name,
         content = this.content,
         lastEdit = this.lastEdit,
-        reminder = this.reminder
+        reminder = this.reminder,
+        isSecret = this.isSecret
     )
 }
 

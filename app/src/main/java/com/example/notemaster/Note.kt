@@ -14,7 +14,8 @@ class Note(
     var name: String = "NaMe",
     var content: Content = Content(),
     var lastEdit: LocalDateTime = LocalDateTime.now(),
-    initialReminder: Reminder? = null
+    initialReminder: Reminder? = null,
+    var isSecret: Boolean = false
 ){
     var reminder: Reminder? = initialReminder
         set(value){

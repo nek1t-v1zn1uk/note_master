@@ -900,9 +900,13 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text("Ше шось треба") },
+                            text = { Text(text = if(note.isSecret)"Показати" else "Приховати") },
                             onClick = {
                                 expanded = false
+                                note.isSecret = !note.isSecret
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    noteDao.update(note.toEntity())
+                                }
                             }
                         )
                         Divider(
