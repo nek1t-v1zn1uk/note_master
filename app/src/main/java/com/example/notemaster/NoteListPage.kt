@@ -98,17 +98,24 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.room.Room
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.withContext
+import java.time.LocalDateTime
 
 
 @Composable
@@ -152,14 +159,30 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
     val activity = remember(context) { context as AppCompatActivity }
 
     var isSecret by remember { mutableStateOf(false) }
+    var isQuickNotes by remember { mutableStateOf(false) }
 
     val list = remember { mutableStateListOf<Note>() }
+    val quick_list = remember { mutableStateListOf<QuickNote>() }
 
+    var quickNoteDao by remember { mutableStateOf<QuickNoteDao?>(null) }
     LaunchedEffect(Unit) {
         val entities = noteDao.getAllNotesOnce()
         list.clear()
         list.addAll(entities.map { it.toNote() })
         Log.d("Shit", "Count:${list.size}")
+
+        val db = Room.databaseBuilder(
+            context,
+            AppDatabase::class.java,
+            "notes_database"
+        )
+            .fallbackToDestructiveMigration()
+            .build()
+
+        quickNoteDao = db.quickNoteDao()
+        val quick_entities = quickNoteDao!!.getAllQuickNotes()
+        quick_list.clear()
+        quick_list.addAll(quick_entities.map { (it.toQuickNote()) })
     }
 
     var isCheckState by remember { mutableStateOf(false) }
@@ -180,76 +203,84 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                     title = {
                         var showDialog by remember { mutableStateOf(false) }
                         Text(
-                            text = "Нотатки" + if(isSecret) "\uD83D\uDD12" else "",
+                            text = if(isQuickNotes) "Швидкі нотатки" else ("Нотатки" + if(isSecret) "\uD83D\uDD12" else ""),
                             modifier = Modifier
                                 .clickable(onClick = {
-                                    if(isSecret) {
-                                        isSecret = false
-                                    }
-                                    else{
-                                        val biometricManager = BiometricManager.from(context)
-                                        when (biometricManager.canAuthenticate(
-                                            BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                                                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
-                                        )) {
-                                            BiometricManager.BIOMETRIC_SUCCESS -> {
-                                                // 1) Підготовка PromptInfo з дозвілом на резервний системний PIN/пароль
-                                                val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                                                    .setTitle("Авторизація")
-                                                    .setSubtitle("Підтвердіть особу")
-                                                    // якщо пристрій не має біометрії або користувач хоче, можна ввійти через системний PIN/пароль
-                                                    .setAllowedAuthenticators(
-                                                        BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                                                                BiometricManager.Authenticators.DEVICE_CREDENTIAL
-                                                    )
-                                                    .build()
-
-                                                // 2) Створюємо BiometricPrompt
-                                                val executor = ContextCompat.getMainExecutor(context)
-                                                val biometricPrompt = BiometricPrompt(
-                                                    activity, executor,
-                                                    object : BiometricPrompt.AuthenticationCallback() {
-                                                        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                                                            super.onAuthenticationSucceeded(result)
-
-                                                            isSecret = true
-                                                        }
-
-                                                        override fun onAuthenticationError(
-                                                            errorCode: Int,
-                                                            errString: CharSequence
-                                                        ) {
-                                                            super.onAuthenticationError(
-                                                                errorCode,
-                                                                errString
+                                    if(!isQuickNotes) {
+                                        if (isSecret) {
+                                            isSecret = false
+                                        } else {
+                                            val biometricManager = BiometricManager.from(context)
+                                            when (biometricManager.canAuthenticate(
+                                                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                                                        BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                                            )) {
+                                                BiometricManager.BIOMETRIC_SUCCESS -> {
+                                                    // 1) Підготовка PromptInfo з дозвілом на резервний системний PIN/пароль
+                                                    val promptInfo =
+                                                        BiometricPrompt.PromptInfo.Builder()
+                                                            .setTitle("Авторизація")
+                                                            .setSubtitle("Підтвердіть особу")
+                                                            // якщо пристрій не має біометрії або користувач хоче, можна ввійти через системний PIN/пароль
+                                                            .setAllowedAuthenticators(
+                                                                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                                                                        BiometricManager.Authenticators.DEVICE_CREDENTIAL
                                                             )
-                                                            // Обробка помилок (наприклад, багато безуспішних спроб)
+                                                            .build()
+
+                                                    // 2) Створюємо BiometricPrompt
+                                                    val executor =
+                                                        ContextCompat.getMainExecutor(context)
+                                                    val biometricPrompt = BiometricPrompt(
+                                                        activity, executor,
+                                                        object :
+                                                            BiometricPrompt.AuthenticationCallback() {
+                                                            override fun onAuthenticationSucceeded(
+                                                                result: BiometricPrompt.AuthenticationResult
+                                                            ) {
+                                                                super.onAuthenticationSucceeded(
+                                                                    result
+                                                                )
+
+                                                                isSecret = true
+                                                            }
+
+                                                            override fun onAuthenticationError(
+                                                                errorCode: Int,
+                                                                errString: CharSequence
+                                                            ) {
+                                                                super.onAuthenticationError(
+                                                                    errorCode,
+                                                                    errString
+                                                                )
+                                                                // Обробка помилок (наприклад, багато безуспішних спроб)
+                                                            }
+
+                                                            override fun onAuthenticationFailed() {
+                                                                super.onAuthenticationFailed()
+                                                                // Не розпізнано відбиток/обличчя
+                                                            }
                                                         }
+                                                    )
 
-                                                        override fun onAuthenticationFailed() {
-                                                            super.onAuthenticationFailed()
-                                                            // Не розпізнано відбиток/обличчя
-                                                        }
-                                                    }
-                                                )
+                                                    // 3) Запускаємо
+                                                    biometricPrompt.authenticate(promptInfo)
+                                                }
 
-                                                // 3) Запускаємо
-                                                biometricPrompt.authenticate(promptInfo)
-                                            }
+                                                BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
+                                                    // немає біометричного датчика
+                                                    isSecret = true
+                                                }
 
-                                            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
-                                                // немає біометричного датчика
-                                                isSecret = true
-                                            }
+                                                BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> {
+                                                    // датчик тимчасово недоступний
+                                                    showDialog = true
+                                                }
 
-                                            BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> {
-                                                // датчик тимчасово недоступний
-                                                showDialog = true
-                                            }
-
-                                            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
-                                                // не налаштований жоден відбиток/обличчя — можна запропонувати поставити пароль
-                                                isSecret = true
+                                                BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
+                                                    // не налаштований жоден відбиток/обличчя — можна запропонувати поставити пароль
+                                                    isSecret = true
+                                                }
                                             }
                                         }
                                     }
@@ -280,6 +311,34 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                     ),
                     actions = {
                         if(isCheckState) {
+
+                            if(isQuickNotes){
+                                Icon(
+                                    imageVector = Icons.Default.NoteAdd,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(height = 40.dp, width = 60.dp)
+                                        .padding(end = 20.dp)
+                                        .clickable(onClick = {
+                                            CoroutineScope(Dispatchers.IO).launch {
+                                                for (id in chosenItems) {
+                                                    val item = quick_list.find { it.id == id }!!
+                                                    noteDao.insert(Note(name = "Швидка нотатка", content = Content(mutableListOf(ItemText(item.text))), lastEdit = LocalDateTime.now()).toEntity())
+                                                    quickNoteDao!!.deleteNoteById(id)
+                                                }
+                                                val updatedNotes = noteDao.getAllNotesOnce()
+                                                withContext(Dispatchers.Main) {
+                                                    list.clear()
+                                                    list.addAll(updatedNotes.map { it.toNote() })
+                                                }
+                                                isQuickNotes = false
+                                                isCheckState = false
+                                                chosenItems.clear()
+                                            }
+                                        })
+                                )
+                            }
                             Icon(
                                 imageVector = Icons.Default.DeleteOutline,
                                 contentDescription = null,
@@ -289,18 +348,33 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                     .padding(end = 20.dp)
                                     .clickable(onClick = {
                                         CoroutineScope(Dispatchers.IO).launch {
-                                            for (id in chosenItems) {
-                                                noteDao.deleteNoteById(id)
-                                                cancelNotification(context, id.hashCode())
+                                            Log.d("!@#$$", "isQuickNotes:$isQuickNotes")
+                                            if(isQuickNotes){
+                                                for (id in chosenItems) {
+                                                    quickNoteDao!!.deleteNoteById(id)
+                                                }
+                                                val updatedNotes = quickNoteDao!!.getAllQuickNotes()
+                                                withContext(Dispatchers.Main) {
+                                                    quick_list.clear()
+                                                    quick_list.addAll(updatedNotes.map { it.toQuickNote() })
+                                                }
                                             }
-                                            val updatedNotes = noteDao.getAllNotesOnce()
-                                            withContext(Dispatchers.Main) {
-                                                list.clear()
-                                                list.addAll(updatedNotes.map { it.toNote() })
+                                            else {
+                                                Log.d("!@#$$", "Deletes")
+                                                for (id in chosenItems) {
+                                                    Log.d("!@#$$", "id:$id")
+                                                    noteDao.deleteNoteById(id)
+                                                    cancelNotification(context, id.hashCode())
+                                                }
+                                                val updatedNotes = noteDao.getAllNotesOnce()
+                                                withContext(Dispatchers.Main) {
+                                                    list.clear()
+                                                    list.addAll(updatedNotes.map { it.toNote() })
+                                                }
                                             }
+                                            chosenItems.clear()
                                         }
                                         isCheckState = false
-
                                     })
                             )
                             Icon(
@@ -312,6 +386,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                     .padding(end = 20.dp)
                                     .clickable(onClick = {
                                         isCheckState = false
+                                        chosenItems.clear()
                                     })
                             )
                         }
@@ -349,7 +424,6 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                             .fillMaxSize()
 
                     ){
-                        var isFirst by remember { mutableStateOf(true) }
                         Column (
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
@@ -357,10 +431,12 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                 .fillMaxHeight()
                                 .weight(1f)
                                 .clickable(onClick = {
-                                    isFirst = true
+                                    isQuickNotes = false
+                                    chosenItems.clear()
+                                    isCheckState = false
                                 })
                         ) {
-                            var fill = if (isFirst) Color.Black else Color.Gray
+                            var fill = if (!isQuickNotes) Color.Black else Color.Gray
                             Icon(
                                 imageVector = Icons.Filled.StickyNote2,
                                 contentDescription = "Notes",
@@ -380,10 +456,19 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                 .fillMaxHeight()
                                 .weight(1f)
                                 .clickable(onClick = {
-                                    isFirst = false
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        val updatedNotes = quickNoteDao!!.getAllQuickNotes()
+                                        withContext(Dispatchers.Main) {
+                                            quick_list.clear()
+                                            quick_list.addAll(updatedNotes.map { it.toQuickNote() })
+                                        }
+                                        isQuickNotes = true
+                                    }
+                                    chosenItems.clear()
+                                    isCheckState = false
                                 })
                         ) {
-                            var fill = if (!isFirst) Color.Black else Color.Gray
+                            var fill = if (isQuickNotes) Color.Black else Color.Gray
                             Icon(
                                 imageVector = Icons.Filled.NoteAlt,
                                 contentDescription = "Notes",
@@ -401,24 +486,55 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
             }
         },
         floatingActionButton = {
+            var isQuickNoteScreen by remember { mutableStateOf(false) }
+            if(isQuickNoteScreen) {
+                Dialog(onDismissRequest = { isQuickNoteScreen = false }) {
+                    QuickNoteScreen(
+                        onSave = {
+                            text ->
+                                if (text.isNotBlank()) {
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        quickNoteDao!!.insert(
+                                            QuickNote(
+                                                text = text,
+                                                lastEdit = LocalDateTime.now()
+                                            ).toQuickNoteEntity()
+                                        )
+                                        val updatedNotes = quickNoteDao!!.getAllQuickNotes()
+                                        withContext(Dispatchers.Main) {
+                                            quick_list.clear()
+                                            quick_list.addAll(updatedNotes.map { it.toQuickNote() })
+                                        }
+                                    }
+                                }
+                                isQuickNoteScreen = false
+                        },
+                        onCancel = { isQuickNoteScreen = false }
+                    )
+                }
+            }
             FloatingActionButton(
                 containerColor = Color(red = 100, green = 100, blue = 255),
                 contentColor = Color.Black,
                 onClick = {
-                    var newNote = Note(isSecret = isSecret)
-                    newNote.content.ensureTrailingText()
-                    list.add(newNote)
-                    CoroutineScope(Dispatchers.IO).launch {
-                        noteDao.insert(newNote.toEntity())
+                    if(isQuickNotes){
+                        isQuickNoteScreen = true
+                    }
+                    else {
+                        var newNote = Note(isSecret = isSecret)
+                        newNote.content.ensureTrailingText()
+                        list.add(newNote)
+                        CoroutineScope(Dispatchers.IO).launch {
+                            noteDao.insert(newNote.toEntity())
 
-                        // Refresh from DB
-                        val entities = noteDao.getAllNotesOnce()
-                        withContext(Dispatchers.Main) {
-                            list.clear()
-                            list.addAll(entities.map { it.toNote() })
+                            // Refresh from DB
+                            val entities = noteDao.getAllNotesOnce()
+                            withContext(Dispatchers.Main) {
+                                list.clear()
+                                list.addAll(entities.map { it.toNote() })
+                            }
                         }
                     }
-
                 }
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add")
@@ -441,129 +557,260 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                 )
             }
 
-            val filtered = list.filter { it.isSecret == isSecret }
+            if(!isQuickNotes) {
+                val filtered = list.filter { it.isSecret == isSecret }
 
-            items(
-                count = filtered.size,
-                key = { filtered[it].id }
-            ){ index ->
-                var item = filtered[index]
-                var isPressed by remember { mutableStateOf(false) }
-                val fastInSlowOut = tween<Float>(
-                    durationMillis = 300,
-                    easing = {
-                        if (it < 0.15f) it * 2f // faster start
-                        else 1f - (1f - it) * (1f - it) // ease out
-                    }
-                )
-                val scale by animateFloatAsState(
-                    targetValue = if (isPressed) 0.90f else 1f,
-                    animationSpec = fastInSlowOut,
-                    label = "PressScale"
-                )
+                items(
+                    count = filtered.size,
+                    key = { filtered[it].id }
+                ) { index ->
+                    var item = filtered[index]
+                    var isPressed by remember { mutableStateOf(false) }
+                    val fastInSlowOut = tween<Float>(
+                        durationMillis = 300,
+                        easing = {
+                            if (it < 0.15f) it * 2f // faster start
+                            else 1f - (1f - it) * (1f - it) // ease out
+                        }
+                    )
+                    val scale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.90f else 1f,
+                        animationSpec = fastInSlowOut,
+                        label = "PressScale"
+                    )
 
-                var isChecked by remember { mutableStateOf(false) }
-                if (!isCheckState)
-                    isChecked = false
+                    var isChecked by remember { mutableStateOf(false) }
+                    if (!isCheckState)
+                        isChecked = false
 
-                Box(
-                    modifier = Modifier
-                        .graphicsLayer(
-                            scaleX = scale,
-                            scaleY = scale
-                        )
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .shadow(
-                            elevation = 4.dp,
-                            shape = RoundedCornerShape(16.dp),
-                            ambientColor = Color.Black.copy(alpha = 1f),
-                            spotColor = Color.Black.copy(alpha = 1f),
-                            clip = true
-                        )
-                        .background(
-                            if (!isChecked) Color.White else Color.LightGray,
-                            RoundedCornerShape(16.dp)
-                        )
-                        .padding(top = 20.dp, bottom = 10.dp, start = 15.dp, end = 15.dp)
-                        .pointerInput(Unit) {
-                            coroutineScope {
-                                detectTapGestures(
-                                    onPress = {
-                                        isPressed = true
+                    Box(
+                        modifier = Modifier
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale
+                            )
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .shadow(
+                                elevation = 4.dp,
+                                shape = RoundedCornerShape(16.dp),
+                                ambientColor = Color.Black.copy(alpha = 1f),
+                                spotColor = Color.Black.copy(alpha = 1f),
+                                clip = true
+                            )
+                            .background(
+                                if (!isChecked) Color.White else Color.LightGray,
+                                RoundedCornerShape(16.dp)
+                            )
+                            .padding(top = 20.dp, bottom = 10.dp, start = 15.dp, end = 15.dp)
+                            .pointerInput(Unit) {
+                                coroutineScope {
+                                    detectTapGestures(
+                                        onPress = {
+                                            isPressed = true
 
-                                        // Launch coroutine to detect long press
-                                        val longPressJob = launch {
-                                            delay(500)
-                                            if (scale == 0.90f)
-                                                isCheckState = true
-                                        }
-
-                                        val released = tryAwaitRelease()
-
-                                        if (released) {
-                                            longPressJob.cancel()
-                                            if (isCheckState) {
-                                                isChecked = !isChecked
-                                                if (isChecked) {
-                                                    chosenItems.add(item.id)
-                                                } else {
-                                                    chosenItems.remove(item.id)
-                                                }
-                                            } else {
-                                                Log.d("NavArgs", "index: ${list.indexOf(item)}")
-                                                // use the actual primary key, not the list position
-                                                navController.navigate("note_page/${item.id}")
+                                            // Launch coroutine to detect long press
+                                            val longPressJob = launch {
+                                                delay(500)
+                                                if (scale == 0.90f)
+                                                    isCheckState = true
                                             }
-                                        }
 
-                                        isPressed = false
-                                    }
+                                            val released = tryAwaitRelease()
+
+                                            if (released) {
+                                                longPressJob.cancel()
+                                                if (isCheckState) {
+                                                    isChecked = !isChecked
+                                                    if (isChecked) {
+                                                        chosenItems.add(item.id)
+                                                        Log.d("!@#$$", "added id:${item.id}")
+                                                    } else {
+                                                        chosenItems.remove(item.id)
+                                                    }
+                                                } else {
+                                                    Log.d("NavArgs", "index: ${list.indexOf(item)}")
+                                                    // use the actual primary key, not the list position
+                                                    navController.navigate("note_page/${item.id}")
+                                                }
+                                            }
+
+                                            isPressed = false
+                                        }
+                                    )
+                                }
+                            }
+
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(end = 50.dp)
+                        ) {
+                            Text(
+                                text = item.name,
+                                fontSize = 18.sp,
+                                color = Color.Black,
+                                maxLines = 2
+                            )
+
+                            Text(
+                                text = item.lastEdit.format(
+                                    DateTimeFormatter.ofPattern(
+                                        "dd MMMM HH:mm",
+                                        Locale("uk")
+                                    )
+                                ),
+                                fontSize = 14.sp,
+                                color = Color.Gray
+                            )
+                        }
+
+
+                        if (isCheckState) {
+                            Box(
+                                contentAlignment = Alignment.CenterEnd,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(end = 10.dp)
+
+                            ) {
+                                Icon(
+                                    imageVector = if (isChecked) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                                    tint = Color.Yellow,
+                                    contentDescription = "Checked",
+                                    modifier = Modifier
                                 )
                             }
                         }
-
-                ) {
-                    Column(
-                        verticalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(end = 50.dp)
-                    ) {
-                        Text(
-                            text = item.name,
-                            fontSize = 18.sp,
-                            color = Color.Black,
-                            maxLines = 2
-                        )
-
-                        Text(
-                            text = item.lastEdit.format(
-                                DateTimeFormatter.ofPattern(
-                                    "dd MMMM HH:mm",
-                                    Locale("uk")
-                                )
-                            ),
-                            fontSize = 14.sp,
-                            color = Color.Gray
-                        )
                     }
+                }
+            }
+            else{
+                items(
+                    count = quick_list.size,
+                    key = { quick_list[it].id }
+                ) { index ->
+                    var item = quick_list[index]
+                    var isPressed by remember { mutableStateOf(false) }
+                    val fastInSlowOut = tween<Float>(
+                        durationMillis = 300,
+                        easing = {
+                            if (it < 0.15f) it * 2f // faster start
+                            else 1f - (1f - it) * (1f - it) // ease out
+                        }
+                    )
+                    val scale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.90f else 1f,
+                        animationSpec = fastInSlowOut,
+                        label = "PressScale"
+                    )
 
+                    var isChecked by remember { mutableStateOf(false) }
+                    if (!isCheckState)
+                        isChecked = false
 
-                    if (isCheckState) {
-                        Box(
-                            contentAlignment = Alignment.CenterEnd,
+                    var isOpen by remember { mutableStateOf(false) }
+
+                    Box(
+                        modifier = Modifier
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale
+                            )
+                            .fillMaxWidth()
+                            .heightIn(min = 40.dp, max = Int.MAX_VALUE.dp)
+                            .shadow(
+                                elevation = 4.dp,
+                                shape = RoundedCornerShape(16.dp),
+                                ambientColor = Color.Black.copy(alpha = 1f),
+                                spotColor = Color.Black.copy(alpha = 1f),
+                                clip = true
+                            )
+                            .background(
+                                if (!isChecked) Color.White else Color.LightGray,
+                                RoundedCornerShape(16.dp)
+                            )
+                            .padding(top = 20.dp, bottom = 10.dp, start = 15.dp, end = 15.dp)
+                            .pointerInput(Unit) {
+                                coroutineScope {
+                                    detectTapGestures(
+                                        onPress = {
+                                            isPressed = true
+
+                                            // Launch coroutine to detect long press
+                                            val longPressJob = launch {
+                                                delay(500)
+                                                if (scale == 0.90f)
+                                                    isCheckState = true
+                                            }
+
+                                            val released = tryAwaitRelease()
+
+                                            if (released) {
+                                                longPressJob.cancel()
+                                                if (isCheckState) {
+                                                    isChecked = !isChecked
+                                                    if (isChecked) {
+                                                        chosenItems.add(item.id)
+                                                    } else {
+                                                        chosenItems.remove(item.id)
+                                                    }
+                                                } else {
+                                                    isOpen = !isOpen
+                                                    //navController.navigate("note_page/${item.id}")
+                                                }
+                                            }
+
+                                            isPressed = false
+                                        }
+                                    )
+                                }
+                            }
+                            .animateContentSize(
+                                animationSpec = tween(durationMillis = 250)
+                            )
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(end = 10.dp)
-
+                                .padding(end = 50.dp)
                         ) {
-                            Icon(
-                                imageVector = if (isChecked) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
-                                tint = Color.Yellow,
-                                contentDescription = "Checked",
-                                modifier = Modifier
+                            Text(
+                                text = item.text,
+                                fontSize = 18.sp,
+                                color = Color.Black,
+                                maxLines = if(isOpen) Int.MAX_VALUE else 2
                             )
+
+                            Text(
+                                text = item.lastEdit.format(
+                                    DateTimeFormatter.ofPattern(
+                                        "dd MMMM HH:mm",
+                                        Locale("uk")
+                                    )
+                                ),
+                                fontSize = 14.sp,
+                                color = Color.Gray
+                            )
+                        }
+                        if (isCheckState) {
+                            Box(
+                                contentAlignment = Alignment.CenterEnd,
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .padding(end = 10.dp)
+
+                            ) {
+                                Icon(
+                                    imageVector = if (isChecked) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                                    tint = Color.Yellow,
+                                    contentDescription = "Checked",
+                                    modifier = Modifier
+                                )
+                            }
                         }
                     }
                 }

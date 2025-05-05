@@ -116,3 +116,9 @@ class Reminder(
     var date: LocalDateTime,
     var descrition: String = ""
 )
+
+class QuickNote(
+    var id: Int = 0,
+    var text: String = "",
+    var lastEdit: LocalDateTime = LocalDateTime.now(),
+)

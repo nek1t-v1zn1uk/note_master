@@ -19,6 +19,60 @@ import java.time.format.DateTimeFormatter
 
 
 // ----------------------------
+// 1) Сутність (Entity)
+// ----------------------------
+@Entity(tableName = "quick_notes")
+data class QuickNoteEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
+    val text: String,
+    val lastEdit: LocalDateTime
+)
+
+// ----------------------------
+// 2) DAO
+// ----------------------------
+@Dao
+interface QuickNoteDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(note: QuickNoteEntity)
+
+    @Update
+    suspend fun update(note: QuickNoteEntity)
+
+    @Delete
+    suspend fun delete(note: QuickNoteEntity)
+
+    @Query("SELECT * FROM quick_notes ORDER BY lastEdit DESC")
+    suspend fun getAllQuickNotes(): List<QuickNoteEntity>
+
+    @Query("SELECT * FROM quick_notes WHERE id = :id LIMIT 1")
+    suspend fun getQuickNoteById(id: Int): QuickNoteEntity?
+
+
+    @Query("DELETE FROM quick_notes WHERE id = :noteId")
+    suspend fun deleteNoteById(noteId: Int)
+}
+
+// ----------------------------
+// 3) Мапери між Entity ↔ Domain
+// ----------------------------
+fun QuickNoteEntity.toQuickNote(): QuickNote =
+    QuickNote(
+        id = this.id,
+        text = this.text,
+        lastEdit = this.lastEdit
+    )
+
+fun QuickNote.toQuickNoteEntity(): QuickNoteEntity =
+    QuickNoteEntity(
+        id = this.id,
+        text = this.text,
+        lastEdit = this.lastEdit
+    )
+
+
+// ----------------------------
 // ENTITY
 // ----------------------------
 @Entity(tableName = "notes")
@@ -113,10 +167,15 @@ interface NoteDao {
 // ----------------------------
 // DATABASE
 // ----------------------------
-@Database(entities = [NoteEntity::class], version = 6)
+@Database(
+    entities = [NoteEntity::class, QuickNoteEntity::class],
+    version = 7,
+    exportSchema = false
+)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
+    abstract fun quickNoteDao(): QuickNoteDao
 }
 
 
