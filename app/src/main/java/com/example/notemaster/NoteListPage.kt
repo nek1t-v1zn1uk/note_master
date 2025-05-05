@@ -477,7 +477,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                     .size(30.dp)
                             )
                             Text(
-                                text="Швидкі нотатки",
+                                text="Швидкі нотатки" + if(!quick_list.isEmpty())" (${quick_list.size})" else "",
                                 color = fill
                             )
                         }
