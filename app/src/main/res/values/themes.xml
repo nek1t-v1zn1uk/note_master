@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.NoteMaster" parent="Theme.AppCompat.Light.NoActionBar" />
+
+    <style name="Theme.NoteMaster.QuickNoteDialog" parent="Theme.AppCompat.DayNight.Dialog.Alert">
+    <!-- Відкривається як модальне вікно на 80% екрану -->
+    <item name="android:windowMinWidthMajor">80%</item>
+    <item name="android:windowMinWidthMinor">80%</item>
+    <item name="android:windowIsTranslucent">true</item>
+    <item name="android:windowCloseOnTouchOutside">true</item>
+</style>
 </resources>

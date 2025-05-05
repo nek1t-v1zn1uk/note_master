@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="quick_note"
+        android:enabled="true"
+        android:icon="@drawable/quick_note"
+        android:shortcutShortLabel="@string/shortcut_quick_note_short_label"
+        android:shortcutLongLabel="@string/shortcut_quick_note_long_label">
+
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="com.example.notemaster"
+            android:targetClass="com.example.notemaster.QuickNoteActivity">
+            <category android:name="android.intent.category.LAUNCHER"/>
+        </intent>
+    </shortcut>
+
+</shortcuts>

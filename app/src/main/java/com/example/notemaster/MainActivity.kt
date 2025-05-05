@@ -1,13 +1,21 @@
 package com.example.notemaster
 
-import android.R
+import android.annotation.SuppressLint
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ShortcutInfo
+import android.content.pm.ShortcutManager
 import android.icu.util.Calendar
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,7 +34,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
+import android.graphics.drawable.Icon
+import android.widget.Toast
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -65,15 +74,77 @@ import kotlinx.coroutines.launch
 
 
 class MainActivity : AppCompatActivity() {
+    @RequiresApi(Build.VERSION_CODES.O)
+    @SuppressLint("WrongThread")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val shortcutManager = getSystemService(ShortcutManager::class.java)
+
+        val shortcutId = "quick_note_pin" // Унікальний ID для дії закріплення ярлика
+        val pinIntent = Intent(this, QuickNoteActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+        }
+        val shortcut = ShortcutInfo.Builder(this, shortcutId)
+            .setShortLabel(getString(R.string.shortcut_quick_note_short_label)) // Змінено label для дії
+            .setLongLabel(getString(R.string.shortcut_quick_note_long_label)) // Змінено label для дії
+            .setIcon(Icon.createWithResource(this, R.drawable.quick_note)) // Змініть іконку, якщо потрібно
+            // !!! ВАЖЛИВО: Цей Intent більше не відкриває Activity напряму !!!
+            // !!! Він використовується лише для запиту на створення ярлика !!!
+            .setIntent(Intent(this, MainActivity::class.java).apply { // Intent для дії в контекстному меню
+                action = ACTION_PIN_QUICK_NOTE
+            })
+            .build()
+
+        @Suppress("WorkerThread")
+        shortcutManager.dynamicShortcuts = listOf(shortcut)
+
+        // --- Обробка Intent, якщо користувач натиснув на ярлик "Швидка нотатка" в меню ---
+        if (intent?.action == ACTION_PIN_QUICK_NOTE) {
+            if (shortcutManager.isRequestPinShortcutSupported) {
+                val shortcutToPin = ShortcutInfo.Builder(this, "pinned_quick_note") // ID для створеного ярлика
+                    .setShortLabel(getString(R.string.shortcut_quick_note_short_label))
+                    .setLongLabel(getString(R.string.shortcut_quick_note_long_label))
+                    .setIcon(Icon.createWithResource(this, R.drawable.quick_note))
+                    .setIntent(pinIntent) // Intent для відкриття QuickNoteActivity
+                    .build()
+
+                val successCallback = PendingIntent.getBroadcast(
+                    this,
+                    0,
+                    Intent(this, ShortcutPinnedReceiver::class.java),
+                    PendingIntent.FLAG_IMMUTABLE
+                )
+
+                shortcutManager.requestPinShortcut(shortcutToPin, successCallback.intentSender)
+            } else {
+                Toast.makeText(this, "Неможливо створити ярлик", Toast.LENGTH_SHORT).show()
+            }
+            // Після спроби створення ярлика, завершуємо цю Activity, щоб користувач не залишився тут
+            finish()
+        }
+
+        // --- Compose UI починається тут ---
         setContent {
             NoteMasterTheme {
                 Surface {
                     MyApp()
                 }
             }
+        }
+    }
+
+    companion object {
+        const val ACTION_PIN_QUICK_NOTE = "com.example.notemaster.ACTION_PIN_QUICK_NOTE"
+    }
+}
+
+// --- BroadcastReceiver для обробки результату закріплення ярлика ---
+class ShortcutPinnedReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+        if (intent != null && intent.action == "com.android.launcher.action.PIN_SHORTCUT_SUCCESS") {
+            Toast.makeText(context, "Ярлик створено успішно", Toast.LENGTH_SHORT).show()
         }
     }
 }
