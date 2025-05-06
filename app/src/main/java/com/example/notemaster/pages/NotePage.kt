@@ -1057,12 +1057,13 @@ fun NoteContentTop(vm: NotePageViewModel, modifier: Modifier = Modifier){
         TextField(
             value = nameValue,
             onValueChange = { newValue ->
+
+                if(nameValue.text != newValue.text) {
+                    vm.setName(newValue.text)
+                }
+
                 nameValue = newValue
 
-                if(nameValue.text != newValue.text)
-                    vm.updateLastEdit()
-
-                vm.setName(newValue.text)
                 //?
                 //FocusedItem.updateTopBar()
             },

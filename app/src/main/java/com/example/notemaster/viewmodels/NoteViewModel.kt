@@ -133,7 +133,7 @@ class NotePageViewModel(
     fun toggleSecret(){
         val old = _note.value!!
         val updated = old.copy(
-            isSecret = old.isSecret
+            isSecret = !old.isSecret
         )
         _note.value = updated
         updateNote()

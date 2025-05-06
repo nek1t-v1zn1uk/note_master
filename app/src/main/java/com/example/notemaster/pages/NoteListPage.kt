@@ -672,7 +672,7 @@ fun NoteList(
                     ){
                         var isOpen by remember { mutableStateOf(false) }
 
-                        var folderList = notes.filter { it.folderId == folder.id }
+                        var folderList = notes.filter { it.folderId == folder.id && it.isSecret == isSec }
 
 
                         var isPressedFolder by remember { mutableStateOf(false) }
