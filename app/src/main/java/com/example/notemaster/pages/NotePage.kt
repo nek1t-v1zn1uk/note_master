@@ -1193,7 +1193,7 @@ fun TextPart(
         if (indexInList == vm.itemIndexInList.value && vm.changeNeeded.value) {
             //Крч воно тут було, але з ним калькулятор не працював
             //focusRequester.requestFocus()
-            textFieldValue = textFieldValue.copy(selection = TextRange(min(vm.indexInItem.value, textFieldValue.text.length - 1)))
+            textFieldValue = textFieldValue.copy(text = item.text, selection = TextRange(vm.indexInItem.value))
             vm.setChangeNeeded(false)
         }
         textFieldValue = textFieldValue.copy(text = item.text)
