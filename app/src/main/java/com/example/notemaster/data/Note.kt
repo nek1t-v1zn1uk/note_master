@@ -1,17 +1,12 @@
-package com.example.notemaster
+package com.example.notemaster.data
 
 import android.net.Uri
-import android.util.Log
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.unit.dp
 import java.time.LocalDateTime
-import java.util.Dictionary
 
 class Note(
     var id: Int = 0,
-    var name: String = "NaMe",
+    var name: String = "Нотатка",
     var content: Content = Content(),
     var lastEdit: LocalDateTime = LocalDateTime.now(),
     initialReminder: Reminder? = null,
@@ -25,6 +20,15 @@ class Note(
     fun hasReminder(): Boolean{
         return reminder != null
     }
+
+    fun copy(
+        id: Int = this.id,
+        name: String = this.name,
+        content: Content = this.content,
+        lastEdit: LocalDateTime = this.lastEdit,
+        reminder: Reminder? = this.reminder,
+        isSecret: Boolean = this.isSecret
+    ) = Note(id, name, content, lastEdit, reminder, isSecret)
 }
 
 class Content(

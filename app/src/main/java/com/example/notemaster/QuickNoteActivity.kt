@@ -1,5 +1,6 @@
 package com.example.notemaster
 
+import android.app.Application
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -14,12 +15,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.room.Room
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import java.time.LocalDateTime
+import com.example.notemaster.database.AppDatabase
+import com.example.notemaster.database.QuickNoteDao
+import com.example.notemaster.viewmodels.QuickNoteViewModel
+import com.example.notemaster.viewmodels.QuickNotesViewModelFactory
 
 class QuickNoteActivity : ComponentActivity() {
     private lateinit var quickNoteDao: QuickNoteDao
@@ -27,7 +28,6 @@ class QuickNoteActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1) Побудова БД і отримання DAO
         val db = Room.databaseBuilder(
             applicationContext,
             AppDatabase::class.java,
@@ -39,35 +39,36 @@ class QuickNoteActivity : ComponentActivity() {
         quickNoteDao = db.quickNoteDao()
 
 
-        val quickNoteDao = db.quickNoteDao()
 
         setContent {
-            QuickNoteScreen(onSave = { text ->
-                // 2) Вставка в БД в IO-корутині
-                if (text.isNotBlank()) {
-                    CoroutineScope(Dispatchers.IO).launch {
-                        quickNoteDao.insert(
-                            QuickNote(
-                                text = text,
-                                lastEdit = LocalDateTime.now()
-                            ).toQuickNoteEntity()
-                        )
+            val application = applicationContext as Application
+            val factory = remember {
+                QuickNotesViewModelFactory(
+                    application = application,
+                    quickNoteDao = quickNoteDao,
+                )
+            }
+            val viewModel: QuickNoteViewModel = viewModel(factory = factory)
+
+            QuickNoteScreen(
+                onSave = { text ->
+                    if (text.isNotBlank()) {
+                        viewModel.addQuickNote(text)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        finishAndRemoveTask()
+                    } else {
+                        finish()
+                    }
+                },
+                onCancel = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        finishAndRemoveTask()
+                    } else {
+                        finish()
                     }
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    finishAndRemoveTask()
-                } else {
-                    finish()
-                }
-                // закриваємо Activity
-            }, onCancel = {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    finishAndRemoveTask()
-                } else {
-                    finish()
-                }
-
-            })
+            )
         }
     }
 }
@@ -75,13 +76,12 @@ class QuickNoteActivity : ComponentActivity() {
 @Composable
 fun QuickNoteScreen(
     onSave: (String) -> Unit,
-    onCancel: () -> Unit,
-    modifier: Modifier = Modifier
+    onCancel: () -> Unit
 ) {
     var text by remember { mutableStateOf("") }
 
     Surface(
-        modifier = modifier
+        modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .heightIn(max = 400.dp)
             .fillMaxSize()

@@ -1,16 +1,10 @@
-package com.example.notemaster
+package com.example.notemaster.pages
 
-import android.R
-import android.R.attr.delay
 import android.app.Activity
-import android.app.AlertDialog
-import android.util.Log
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
+import android.app.Application
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -21,53 +15,29 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BlurCircular
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Create
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NoteAlt
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.StickyNote2
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.BottomAppBar
-import androidx.compose.material3.BottomAppBarDefaults
-import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
-import androidx.compose.material3.DividerDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,21 +45,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.Wallpapers
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
-import com.example.notemaster.ui.theme.NoteMasterTheme
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -103,18 +66,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
-import androidx.room.Room
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.notemaster.QuickNoteScreen
+import com.example.notemaster.data.Note
+import com.example.notemaster.data.QuickNote
+import com.example.notemaster.database.NoteDao
+import com.example.notemaster.database.QuickNoteDao
+import com.example.notemaster.viewmodels.*
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlinx.coroutines.withContext
 import java.time.LocalDateTime
 
 
@@ -149,47 +114,39 @@ fun HandleBackPress(
     }
 }
 
-var chosenItems: MutableList<Int> = mutableStateListOf()
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NoteList(navController: NavController, noteDao: NoteDao){
+fun NoteList(
+    noteDao2: NoteDao,
+    quickNoteDao2: QuickNoteDao,
+    navController: NavController
+){
+    val application = LocalContext.current.applicationContext as Application
+    val factory = remember {
+        NoteListViewModelFactory(
+            application = application,
+            noteDao = noteDao2,
+            quickNoteDao = quickNoteDao2
+        )
+    }
+    val viewModel: NoteListViewModel = viewModel(factory = factory)
+
+    val notes by viewModel.allNotes.collectAsState()
+    val quickNotes by viewModel.quickNotes.collectAsState()
+    val isQuick by viewModel.isQuickNotes.collectAsState()
+    val isSec by viewModel.isSecret.collectAsState()
+    val isChk by viewModel.isCheckMode.collectAsState()
+    val selIds by viewModel.selectedIds.collectAsState()
+
+
     val context = LocalContext.current
     val activity = remember(context) { context as AppCompatActivity }
 
-    var isSecret by remember { mutableStateOf(false) }
-    var isQuickNotes by remember { mutableStateOf(false) }
-
-    val list = remember { mutableStateListOf<Note>() }
-    val quick_list = remember { mutableStateListOf<QuickNote>() }
-
-    var quickNoteDao by remember { mutableStateOf<QuickNoteDao?>(null) }
-    LaunchedEffect(Unit) {
-        val entities = noteDao.getAllNotesOnce()
-        list.clear()
-        list.addAll(entities.map { it.toNote() })
-        Log.d("Shit", "Count:${list.size}")
-
-        val db = Room.databaseBuilder(
-            context,
-            AppDatabase::class.java,
-            "notes_database"
-        )
-            .fallbackToDestructiveMigration()
-            .build()
-
-        quickNoteDao = db.quickNoteDao()
-        val quick_entities = quickNoteDao!!.getAllQuickNotes()
-        quick_list.clear()
-        quick_list.addAll(quick_entities.map { (it.toQuickNote()) })
-    }
-
-    var isCheckState by remember { mutableStateOf(false) }
 
     HandleBackPress(
-        isCheckState = isCheckState,
-        onClearCheckState = { isCheckState = false },
+        isCheckState = isChk,
+        onClearCheckState = { viewModel.exitCheckMode() },
         navController = navController
     )
 
@@ -203,12 +160,12 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                     title = {
                         var showDialog by remember { mutableStateOf(false) }
                         Text(
-                            text = if(isQuickNotes) "Швидкі нотатки" else ("Нотатки" + if(isSecret) "\uD83D\uDD12" else ""),
+                            text = if(isQuick) "Швидкі нотатки" else ("Нотатки" + if(isSec) "\uD83D\uDD12" else ""),
                             modifier = Modifier
                                 .clickable(onClick = {
-                                    if(!isQuickNotes) {
-                                        if (isSecret) {
-                                            isSecret = false
+                                    if(!isQuick) {
+                                        if (isSec) {
+                                            viewModel.exitSecretMode()
                                         } else {
                                             val biometricManager = BiometricManager.from(context)
                                             when (biometricManager.canAuthenticate(
@@ -242,7 +199,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                                                     result
                                                                 )
 
-                                                                isSecret = true
+                                                                viewModel.enterSecretMode()
                                                             }
 
                                                             override fun onAuthenticationError(
@@ -269,7 +226,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
 
                                                 BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
                                                     // немає біометричного датчика
-                                                    isSecret = true
+                                                    viewModel.enterSecretMode()
                                                 }
 
                                                 BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> {
@@ -279,7 +236,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
 
                                                 BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
                                                     // не налаштований жоден відбиток/обличчя — можна запропонувати поставити пароль
-                                                    isSecret = true
+                                                    viewModel.enterSecretMode()
                                                 }
                                             }
                                         }
@@ -287,7 +244,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                 })
                         )
                         if (showDialog) {
-                            androidx.compose.material3.AlertDialog(
+                            AlertDialog(
                                 onDismissRequest = {
                                     showDialog = false
                                 },
@@ -310,9 +267,9 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                         titleContentColor = Color.Black
                     ),
                     actions = {
-                        if(isCheckState) {
+                        if(isChk) {
 
-                            if(isQuickNotes){
+                            if(isQuick){
                                 Icon(
                                     imageVector = Icons.Default.NoteAdd,
                                     contentDescription = null,
@@ -321,21 +278,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                         .size(height = 40.dp, width = 60.dp)
                                         .padding(end = 20.dp)
                                         .clickable(onClick = {
-                                            CoroutineScope(Dispatchers.IO).launch {
-                                                for (id in chosenItems) {
-                                                    val item = quick_list.find { it.id == id }!!
-                                                    noteDao.insert(Note(name = "Швидка нотатка", content = Content(mutableListOf(ItemText(item.text))), lastEdit = LocalDateTime.now()).toEntity())
-                                                    quickNoteDao!!.deleteNoteById(id)
-                                                }
-                                                val updatedNotes = noteDao.getAllNotesOnce()
-                                                withContext(Dispatchers.Main) {
-                                                    list.clear()
-                                                    list.addAll(updatedNotes.map { it.toNote() })
-                                                }
-                                                isQuickNotes = false
-                                                isCheckState = false
-                                                chosenItems.clear()
-                                            }
+                                            viewModel.convertQuickNotesToNotes()
                                         })
                                 )
                             }
@@ -347,34 +290,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                     .size(height = 40.dp, width = 60.dp)
                                     .padding(end = 20.dp)
                                     .clickable(onClick = {
-                                        CoroutineScope(Dispatchers.IO).launch {
-                                            Log.d("!@#$$", "isQuickNotes:$isQuickNotes")
-                                            if(isQuickNotes){
-                                                for (id in chosenItems) {
-                                                    quickNoteDao!!.deleteNoteById(id)
-                                                }
-                                                val updatedNotes = quickNoteDao!!.getAllQuickNotes()
-                                                withContext(Dispatchers.Main) {
-                                                    quick_list.clear()
-                                                    quick_list.addAll(updatedNotes.map { it.toQuickNote() })
-                                                }
-                                            }
-                                            else {
-                                                Log.d("!@#$$", "Deletes")
-                                                for (id in chosenItems) {
-                                                    Log.d("!@#$$", "id:$id")
-                                                    noteDao.deleteNoteById(id)
-                                                    cancelNotification(context, id.hashCode())
-                                                }
-                                                val updatedNotes = noteDao.getAllNotesOnce()
-                                                withContext(Dispatchers.Main) {
-                                                    list.clear()
-                                                    list.addAll(updatedNotes.map { it.toNote() })
-                                                }
-                                            }
-                                            chosenItems.clear()
-                                        }
-                                        isCheckState = false
+                                        viewModel.deleteSelected()
                                     })
                             )
                             Icon(
@@ -385,8 +301,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                     .size(height = 40.dp, width = 60.dp)
                                     .padding(end = 20.dp)
                                     .clickable(onClick = {
-                                        isCheckState = false
-                                        chosenItems.clear()
+                                        viewModel.exitCheckMode()
                                     })
                             )
                         }
@@ -431,12 +346,11 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                 .fillMaxHeight()
                                 .weight(1f)
                                 .clickable(onClick = {
-                                    isQuickNotes = false
-                                    chosenItems.clear()
-                                    isCheckState = false
+                                    viewModel.exitCheckMode()
+                                    viewModel.moveToNotes()
                                 })
                         ) {
-                            var fill = if (!isQuickNotes) Color.Black else Color.Gray
+                            var fill = if (!isQuick) Color.Black else Color.Gray
                             Icon(
                                 imageVector = Icons.Filled.StickyNote2,
                                 contentDescription = "Notes",
@@ -456,19 +370,11 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                 .fillMaxHeight()
                                 .weight(1f)
                                 .clickable(onClick = {
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        val updatedNotes = quickNoteDao!!.getAllQuickNotes()
-                                        withContext(Dispatchers.Main) {
-                                            quick_list.clear()
-                                            quick_list.addAll(updatedNotes.map { it.toQuickNote() })
-                                        }
-                                        isQuickNotes = true
-                                    }
-                                    chosenItems.clear()
-                                    isCheckState = false
+                                    viewModel.exitCheckMode()
+                                    viewModel.moveToQuickNotes()
                                 })
                         ) {
-                            var fill = if (isQuickNotes) Color.Black else Color.Gray
+                            var fill = if (isQuick) Color.Black else Color.Gray
                             Icon(
                                 imageVector = Icons.Filled.NoteAlt,
                                 contentDescription = "Notes",
@@ -477,7 +383,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                     .size(30.dp)
                             )
                             Text(
-                                text="Швидкі нотатки" + if(!quick_list.isEmpty())" (${quick_list.size})" else "",
+                                text="Швидкі нотатки" + if(!quickNotes.isEmpty())" (${quickNotes.size})" else "",
                                 color = fill
                             )
                         }
@@ -490,24 +396,16 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
             if(isQuickNoteScreen) {
                 Dialog(onDismissRequest = { isQuickNoteScreen = false }) {
                     QuickNoteScreen(
-                        onSave = {
-                            text ->
-                                if (text.isNotBlank()) {
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        quickNoteDao!!.insert(
-                                            QuickNote(
-                                                text = text,
-                                                lastEdit = LocalDateTime.now()
-                                            ).toQuickNoteEntity()
-                                        )
-                                        val updatedNotes = quickNoteDao!!.getAllQuickNotes()
-                                        withContext(Dispatchers.Main) {
-                                            quick_list.clear()
-                                            quick_list.addAll(updatedNotes.map { it.toQuickNote() })
-                                        }
-                                    }
-                                }
-                                isQuickNoteScreen = false
+                        onSave = { text ->
+                            if (text.isNotBlank()) {
+                                viewModel.addQuickNote(
+                                    QuickNote(
+                                        text = text,
+                                        lastEdit = LocalDateTime.now()
+                                    )
+                                )
+                            }
+                            isQuickNoteScreen = false
                         },
                         onCancel = { isQuickNoteScreen = false }
                     )
@@ -517,23 +415,13 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                 containerColor = Color(red = 100, green = 100, blue = 255),
                 contentColor = Color.Black,
                 onClick = {
-                    if(isQuickNotes){
+                    if(isQuick){
                         isQuickNoteScreen = true
                     }
                     else {
-                        var newNote = Note(isSecret = isSecret)
+                        var newNote = Note(isSecret = isSec)
                         newNote.content.ensureTrailingText()
-                        list.add(newNote)
-                        CoroutineScope(Dispatchers.IO).launch {
-                            noteDao.insert(newNote.toEntity())
-
-                            // Refresh from DB
-                            val entities = noteDao.getAllNotesOnce()
-                            withContext(Dispatchers.Main) {
-                                list.clear()
-                                list.addAll(entities.map { it.toNote() })
-                            }
-                        }
+                        viewModel.addNote(newNote)
                     }
                 }
             ) {
@@ -557,8 +445,8 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                 )
             }
 
-            if(!isQuickNotes) {
-                val filtered = list.filter { it.isSecret == isSecret }
+            if(!isQuick) {
+                val filtered = notes.filter { it.isSecret == isSec }
 
                 items(
                     count = filtered.size,
@@ -580,7 +468,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                     )
 
                     var isChecked by remember { mutableStateOf(false) }
-                    if (!isCheckState)
+                    if (!isChk)
                         isChecked = false
 
                     Box(
@@ -613,24 +501,21 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                             val longPressJob = launch {
                                                 delay(500)
                                                 if (scale == 0.90f)
-                                                    isCheckState = true
+                                                    viewModel.enterCheckMode()
                                             }
 
                                             val released = tryAwaitRelease()
 
                                             if (released) {
                                                 longPressJob.cancel()
-                                                if (isCheckState) {
+                                                if (isChk) {
                                                     isChecked = !isChecked
                                                     if (isChecked) {
-                                                        chosenItems.add(item.id)
-                                                        Log.d("!@#$$", "added id:${item.id}")
+                                                        viewModel.select(item.id)
                                                     } else {
-                                                        chosenItems.remove(item.id)
+                                                        viewModel.deselect(item.id)
                                                     }
                                                 } else {
-                                                    Log.d("NavArgs", "index: ${list.indexOf(item)}")
-                                                    // use the actual primary key, not the list position
                                                     navController.navigate("note_page/${item.id}")
                                                 }
                                             }
@@ -668,7 +553,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                         }
 
 
-                        if (isCheckState) {
+                        if (isChk) {
                             Box(
                                 contentAlignment = Alignment.CenterEnd,
                                 modifier = Modifier
@@ -689,10 +574,10 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
             }
             else{
                 items(
-                    count = quick_list.size,
-                    key = { quick_list[it].id }
+                    count = quickNotes.size,
+                    key = { quickNotes[it].id }
                 ) { index ->
-                    var item = quick_list[index]
+                    var item = quickNotes[index]
                     var isPressed by remember { mutableStateOf(false) }
                     val fastInSlowOut = tween<Float>(
                         durationMillis = 300,
@@ -708,7 +593,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                     )
 
                     var isChecked by remember { mutableStateOf(false) }
-                    if (!isCheckState)
+                    if (!isChk)
                         isChecked = false
 
                     var isOpen by remember { mutableStateOf(false) }
@@ -743,23 +628,22 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                             val longPressJob = launch {
                                                 delay(500)
                                                 if (scale == 0.90f)
-                                                    isCheckState = true
+                                                    viewModel.enterCheckMode()
                                             }
 
                                             val released = tryAwaitRelease()
 
                                             if (released) {
                                                 longPressJob.cancel()
-                                                if (isCheckState) {
+                                                if (isChk) {
                                                     isChecked = !isChecked
                                                     if (isChecked) {
-                                                        chosenItems.add(item.id)
+                                                        viewModel.select(item.id)
                                                     } else {
-                                                        chosenItems.remove(item.id)
+                                                        viewModel.deselect(item.id)
                                                     }
                                                 } else {
                                                     isOpen = !isOpen
-                                                    //navController.navigate("note_page/${item.id}")
                                                 }
                                             }
 
@@ -796,7 +680,7 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                                 color = Color.Gray
                             )
                         }
-                        if (isCheckState) {
+                        if (isChk) {
                             Box(
                                 contentAlignment = Alignment.CenterEnd,
                                 modifier = Modifier
@@ -822,53 +706,5 @@ fun NoteList(navController: NavController, noteDao: NoteDao){
                 )
             }
         }
-        /*
-        val scrollState = rememberScrollState()
-
-        Column(
-            verticalArrangement = Arrangement.spacedBy(15.dp),
-            modifier = Modifier
-                .padding(innerPadding)
-                .padding(horizontal = 10.dp)
-                .verticalScroll(scrollState)
-        ) {
-            Divider(
-                thickness = 10.dp,
-                color = Color.White
-            )
-            for(item in list){
-
-            }
-            Divider(
-                thickness = 15.dp,
-                color = Color.White
-            )
-        }
-        */
-    }
-}
-
-
-
-@Preview(showBackground = true,
-    device = "spec:width=393dp,height=873dp", name = "MyXiaomi", apiLevel = 35,
-    wallpaper = Wallpapers.GREEN_DOMINATED_EXAMPLE
-)
-@Composable
-fun NoteListPreview(){
-    val list = arrayOf<Note>(
-        Note(0, "Лабораторні"),
-        Note(0, "Курсовий проект"),
-        Note(0, "Днюхи"),
-        Note(0, "Велосипед"),
-        Note(0, "Закупки"),
-        Note(0, "Закупки"),
-        Note(0, "Закупки"),
-        Note(0, "Закупки"),
-        Note(0, "Закупки"),
-        Note(0, "Закупки")
-    )
-    NoteMasterTheme{
-        //NoteList(list, rememberNavController(), null)
     }
 }

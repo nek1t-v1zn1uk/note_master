@@ -1,10 +1,19 @@
-package com.example.notemaster
+package com.example.notemaster.database
 
 import android.net.Uri
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonWriter
 import android.util.Log
 import androidx.room.*
+import com.example.notemaster.data.Content
+import com.example.notemaster.data.ContentItem
+import com.example.notemaster.data.ItemCheckBox
+import com.example.notemaster.data.ItemFile
+import com.example.notemaster.data.ItemImage
+import com.example.notemaster.data.ItemText
+import com.example.notemaster.data.Note
+import com.example.notemaster.data.QuickNote
+import com.example.notemaster.data.Reminder
 import com.google.gson.TypeAdapter
 import com.google.gson.TypeAdapterFactory
 import com.google.gson.Gson
@@ -18,9 +27,6 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 
-// ----------------------------
-// 1) Сутність (Entity)
-// ----------------------------
 @Entity(tableName = "quick_notes")
 data class QuickNoteEntity(
     @PrimaryKey(autoGenerate = true)
@@ -29,9 +35,6 @@ data class QuickNoteEntity(
     val lastEdit: LocalDateTime
 )
 
-// ----------------------------
-// 2) DAO
-// ----------------------------
 @Dao
 interface QuickNoteDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -46,6 +49,9 @@ interface QuickNoteDao {
     @Query("SELECT * FROM quick_notes ORDER BY lastEdit DESC")
     suspend fun getAllQuickNotes(): List<QuickNoteEntity>
 
+    @Query("SELECT * FROM quick_notes ORDER BY lastEdit DESC")
+    fun getAllQuickNotesFlow(): Flow<List<QuickNoteEntity>>
+
     @Query("SELECT * FROM quick_notes WHERE id = :id LIMIT 1")
     suspend fun getQuickNoteById(id: Int): QuickNoteEntity?
 
@@ -54,9 +60,6 @@ interface QuickNoteDao {
     suspend fun deleteNoteById(noteId: Int)
 }
 
-// ----------------------------
-// 3) Мапери між Entity ↔ Domain
-// ----------------------------
 fun QuickNoteEntity.toQuickNote(): QuickNote =
     QuickNote(
         id = this.id,
@@ -71,10 +74,6 @@ fun QuickNote.toQuickNoteEntity(): QuickNoteEntity =
         lastEdit = this.lastEdit
     )
 
-
-// ----------------------------
-// ENTITY
-// ----------------------------
 @Entity(tableName = "notes")
 data class NoteEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
@@ -85,9 +84,6 @@ data class NoteEntity(
     val isSecret: Boolean
 )
 
-// ----------------------------
-// TYPE CONVERTERS
-// ----------------------------
 class Converters {
 
     val gson: Gson = GsonBuilder()
@@ -139,9 +135,6 @@ class Converters {
         data?.let { gson.fromJson(it, Reminder::class.java) }
 }
 
-// ----------------------------
-// DAO
-// ----------------------------
 @Dao
 interface NoteDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -156,17 +149,20 @@ interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY lastEdit DESC")
     suspend fun getAllNotesOnce(): List<NoteEntity>
 
+    @Query("SELECT * FROM notes ORDER BY lastEdit DESC")
+    fun getAllNotesFlow(): Flow<List<NoteEntity>>
+
     @Query("SELECT * FROM notes WHERE id = :noteId LIMIT 1")
     suspend fun getNoteById(noteId: Int): NoteEntity?
+
+    @Query("SELECT * FROM notes WHERE id = :noteId")
+    fun getNoteByIdFlow(noteId: Int): Flow<NoteEntity?>
 
     @Query("DELETE FROM notes WHERE id = :noteId")
     suspend fun deleteNoteById(noteId: Int)
 
 }
 
-// ----------------------------
-// DATABASE
-// ----------------------------
 @Database(
     entities = [NoteEntity::class, QuickNoteEntity::class],
     version = 7,
@@ -177,10 +173,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
     abstract fun quickNoteDao(): QuickNoteDao
 }
-
-
-
-
 
 // Convert NoteEntity -> Note
 fun NoteEntity.toNote(): Note {
