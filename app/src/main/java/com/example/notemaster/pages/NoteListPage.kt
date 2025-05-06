@@ -2,6 +2,8 @@ package com.example.notemaster.pages
 
 import android.app.Activity
 import android.app.Application
+import android.app.Dialog
+import android.util.Log
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -43,7 +45,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -63,18 +64,32 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.FolderOff
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.alpha
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.notemaster.QuickNoteScreen
+import com.example.notemaster.data.Folder
 import com.example.notemaster.data.Note
 import com.example.notemaster.data.QuickNote
+import com.example.notemaster.database.FolderDao
 import com.example.notemaster.database.NoteDao
 import com.example.notemaster.database.QuickNoteDao
 import com.example.notemaster.viewmodels.*
@@ -118,26 +133,30 @@ fun HandleBackPress(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteList(
-    noteDao2: NoteDao,
-    quickNoteDao2: QuickNoteDao,
+    noteDao: NoteDao,
+    quickNoteDao: QuickNoteDao,
+    folderDao: FolderDao,
     navController: NavController
 ){
     val application = LocalContext.current.applicationContext as Application
     val factory = remember {
         NoteListViewModelFactory(
             application = application,
-            noteDao = noteDao2,
-            quickNoteDao = quickNoteDao2
+            noteDao = noteDao,
+            quickNoteDao = quickNoteDao,
+            folderDao = folderDao
         )
     }
     val viewModel: NoteListViewModel = viewModel(factory = factory)
 
     val notes by viewModel.allNotes.collectAsState()
     val quickNotes by viewModel.quickNotes.collectAsState()
+    val folders by viewModel.folders.collectAsState()
     val isQuick by viewModel.isQuickNotes.collectAsState()
     val isSec by viewModel.isSecret.collectAsState()
     val isChk by viewModel.isCheckMode.collectAsState()
-    val selIds by viewModel.selectedIds.collectAsState()
+    val selItemsIds by viewModel.selectedItemsIds.collectAsState()
+    val selFoldersIds by viewModel.selectedFoldersIds.collectAsState()
 
 
     val context = LocalContext.current
@@ -282,6 +301,189 @@ fun NoteList(
                                         })
                                 )
                             }
+                            else {
+                                var isMenu by remember { mutableStateOf(false) }
+                                if(isMenu){
+                                    Dialog(onDismissRequest = { isMenu = false }){
+                                        Box(
+                                            modifier = Modifier
+                                                .size(500.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(Color.White)
+                                                .padding(20.dp)
+                                        ){
+                                            Column(
+                                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                            ){
+                                                var getName by remember { mutableStateOf(false) }
+                                                if(getName) {
+                                                    Dialog(onDismissRequest = { getName = false }) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .height(140.dp)
+                                                                .clip(RoundedCornerShape(16.dp))
+                                                                .background(Color.White)
+                                                                .padding(20.dp)
+                                                        ){
+                                                            Column(
+                                                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                                                horizontalAlignment = Alignment.End,
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                            ){
+                                                                var nameValue by remember { mutableStateOf("") }
+                                                                TextField(
+                                                                    value = nameValue,
+                                                                    onValueChange = { nameValue = it },
+                                                                    placeholder = { Text("Нова папка...", color = Color.Black) },
+                                                                    colors = TextFieldDefaults.colors(
+                                                                        focusedContainerColor = Color(red = 100, green = 100, blue = 255, alpha = 120),
+                                                                        unfocusedContainerColor = Color(red = 100, green = 100, blue = 255, alpha = 80),
+                                                                        focusedIndicatorColor = Color.Transparent,
+                                                                        unfocusedIndicatorColor = Color.Transparent,
+                                                                        focusedPlaceholderColor = Color.LightGray,
+                                                                        unfocusedPlaceholderColor = Color.LightGray,
+                                                                        cursorColor = Color(red = 100, green = 100, blue = 255),
+                                                                        selectionColors = TextSelectionColors(
+                                                                            handleColor = Color(red = 100, green = 100, blue = 255),
+                                                                            backgroundColor = Color(red = 100, green = 100, blue = 255, alpha = 100),
+                                                                        ),
+                                                                        disabledIndicatorColor = Color(red = 100, green = 100, blue = 255),
+                                                                        errorIndicatorColor = Color(red = 100, green = 100, blue = 255),
+
+                                                                        ),
+                                                                    modifier = Modifier
+                                                                        .fillMaxWidth()
+                                                                )
+                                                                Button(
+                                                                    onClick = {
+                                                                        viewModel.addFolder(Folder(name = nameValue))
+                                                                        getName = false
+                                                                    },
+                                                                    colors = ButtonDefaults.buttonColors(
+                                                                        containerColor = Color(red = 100, green = 100, blue = 255),
+                                                                        contentColor = Color.Black,
+                                                                        disabledContainerColor = Color(red = 100, green = 100, blue = 255),
+                                                                        disabledContentColor = Color(red = 0, green = 100, blue = 255),
+                                                                    )
+                                                                ){
+                                                                    Text("Добавити")
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                Row(
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(16.dp))
+                                                        .background(
+                                                            Color(
+                                                                red = 100,
+                                                                green = 100,
+                                                                blue = 255,
+                                                                alpha = 40
+                                                            )
+                                                        )
+                                                        .padding(8.dp)
+                                                        .padding(start = 12.dp)
+                                                        .clickable {
+                                                            getName = true
+                                                        }
+                                                ){
+                                                    Text(
+                                                        text = "Створити нову папку",
+                                                        color = Color.Black
+                                                    )
+                                                    Icon(
+                                                        imageVector = Icons.Default.Add,
+                                                        contentDescription = null,
+                                                        tint = Color(red = 100, green = 100, blue = 255, alpha = 200),
+                                                        modifier = Modifier
+                                                            .size(50.dp)
+                                                            .padding(4.dp)
+                                                    )
+                                                }
+                                                Row(
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(16.dp))
+                                                        .background(
+                                                            Color(
+                                                                red = 100,
+                                                                green = 100,
+                                                                blue = 255,
+                                                                alpha = 40
+                                                            )
+                                                        )
+                                                        .padding(8.dp)
+                                                        .padding(start = 12.dp)
+                                                        .clickable {
+                                                            viewModel.addSelectedToFolder(null)
+                                                        }
+                                                ){
+                                                    Text(
+                                                        text = "Винести з папки",
+                                                        color = Color.Black
+                                                    )
+                                                    Icon(
+                                                        imageVector = Icons.Default.FolderOff,
+                                                        contentDescription = null,
+                                                        tint = Color(red = 100, green = 100, blue = 255, alpha = 200),
+                                                        modifier = Modifier
+                                                            .size(50.dp)
+                                                            .padding(4.dp)
+                                                    )
+                                                }
+                                                for(folder in folders){
+                                                    Box(
+                                                        contentAlignment = Alignment.CenterStart,
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(50.dp)
+                                                            .clip(RoundedCornerShape(16.dp))
+                                                            .background(
+                                                                Color(
+                                                                    red = 100,
+                                                                    green = 100,
+                                                                    blue = 255,
+                                                                    alpha = 40
+                                                                )
+                                                            )
+                                                            .padding(8.dp)
+                                                            .padding(start = 12.dp)
+                                                            .clickable {
+                                                                viewModel.addSelectedToFolder(folder.id)
+                                                            }
+                                                    ){
+                                                        Text(
+                                                            text = folder.name,
+                                                            color = Color.Black
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.FolderOpen,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(height = 40.dp, width = 60.dp)
+                                        .padding(end = 20.dp)
+                                        .clickable {
+                                            isMenu = true
+                                        }
+                                )
+                            }
                             Icon(
                                 imageVector = Icons.Default.DeleteOutline,
                                 contentDescription = null,
@@ -392,40 +594,41 @@ fun NoteList(
             }
         },
         floatingActionButton = {
-            var isQuickNoteScreen by remember { mutableStateOf(false) }
-            if(isQuickNoteScreen) {
-                Dialog(onDismissRequest = { isQuickNoteScreen = false }) {
-                    QuickNoteScreen(
-                        onSave = { text ->
-                            if (text.isNotBlank()) {
-                                viewModel.addQuickNote(
-                                    QuickNote(
-                                        text = text,
-                                        lastEdit = LocalDateTime.now()
+            if(!isChk) {
+                var isQuickNoteScreen by remember { mutableStateOf(false) }
+                if (isQuickNoteScreen) {
+                    Dialog(onDismissRequest = { isQuickNoteScreen = false }) {
+                        QuickNoteScreen(
+                            onSave = { text ->
+                                if (text.isNotBlank()) {
+                                    viewModel.addQuickNote(
+                                        QuickNote(
+                                            text = text,
+                                            lastEdit = LocalDateTime.now()
+                                        )
                                     )
-                                )
-                            }
-                            isQuickNoteScreen = false
-                        },
-                        onCancel = { isQuickNoteScreen = false }
-                    )
-                }
-            }
-            FloatingActionButton(
-                containerColor = Color(red = 100, green = 100, blue = 255),
-                contentColor = Color.Black,
-                onClick = {
-                    if(isQuick){
-                        isQuickNoteScreen = true
-                    }
-                    else {
-                        var newNote = Note(isSecret = isSec)
-                        newNote.content.ensureTrailingText()
-                        viewModel.addNote(newNote)
+                                }
+                                isQuickNoteScreen = false
+                            },
+                            onCancel = { isQuickNoteScreen = false }
+                        )
                     }
                 }
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add")
+                FloatingActionButton(
+                    containerColor = Color(red = 100, green = 100, blue = 255),
+                    contentColor = Color.Black,
+                    onClick = {
+                        if (isQuick) {
+                            isQuickNoteScreen = true
+                        } else {
+                            var newNote = Note(isSecret = isSec)
+                            newNote.content.ensureTrailingText()
+                            viewModel.addNote(newNote)
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add")
+                }
             }
         }
 
@@ -446,11 +649,275 @@ fun NoteList(
             }
 
             if(!isQuick) {
-                val filtered = notes.filter { it.isSecret == isSec }
+
+                items(
+                    count = folders.size,
+                    key = { "folder-${folders[it].id}" }
+                ) {
+                    var folder = folders[it]
+                    Column(
+                        modifier = Modifier
+                            .shadow(
+                                elevation = 4.dp,
+                                shape = RoundedCornerShape(16.dp),
+                                ambientColor = Color.Black.copy(alpha = 1f),
+                                spotColor = Color.Black.copy(alpha = 1f),
+                                clip = true
+                            )
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.LightGray)
+                            .animateContentSize(
+                                animationSpec = tween(durationMillis = 250)
+                            )
+                    ){
+                        var isOpen by remember { mutableStateOf(false) }
+
+                        var folderList = notes.filter { it.folderId == folder.id }
+
+
+                        var isPressedFolder by remember { mutableStateOf(false) }
+                        val fastInSlowOut = tween<Float>(
+                            durationMillis = 300,
+                            easing = {
+                                if (it < 0.15f) it * 2f // faster start
+                                else 1f - (1f - it) * (1f - it) // ease out
+                            }
+                        )
+                        val scaleFolder by animateFloatAsState(
+                            targetValue = if (isPressedFolder) 0.90f else 1f,
+                            animationSpec = fastInSlowOut,
+                            label = "PressScale"
+                        )
+
+                        var isCheckedFolder by remember { mutableStateOf(false) }
+                        if (!isChk)
+                            isCheckedFolder = false
+
+                        Box(
+                            contentAlignment = Alignment.CenterStart,
+                            modifier = Modifier
+                                .graphicsLayer(
+                                    scaleX = scaleFolder,
+                                    scaleY = scaleFolder
+                                )
+                                .shadow(
+                                    elevation = 4.dp,
+                                    shape = RoundedCornerShape(16.dp),
+                                    ambientColor = Color.Black.copy(alpha = 1f),
+                                    spotColor = Color.Black.copy(alpha = 1f),
+                                    clip = true
+                                )
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .background(
+                                    if (!isCheckedFolder) Color.White else Color.LightGray,
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .padding(top = 10.dp, bottom = 10.dp, start = 15.dp, end = 15.dp)
+                                .pointerInput(Unit) {
+                                    coroutineScope {
+                                        detectTapGestures(
+                                            onPress = {
+                                                isPressedFolder = true
+
+                                                // Launch coroutine to detect long press
+                                                val longPressJob = launch {
+                                                    delay(500)
+                                                    if (scaleFolder == 0.90f)
+                                                        viewModel.enterCheckMode()
+                                                }
+
+                                                val released = tryAwaitRelease()
+
+                                                if (released) {
+                                                    longPressJob.cancel()
+                                                    if (isChk) {
+                                                        isCheckedFolder = !isCheckedFolder
+                                                        if (isCheckedFolder) {
+                                                            viewModel.selectFolder(folder.id)
+                                                            for (item in folderList)
+                                                                viewModel.selectItem(item.id)
+                                                        } else {
+                                                            viewModel.deselectFolder(folder.id)
+                                                            for (item in folderList)
+                                                                viewModel.deselectItem(item.id)
+                                                        }
+                                                    } else {
+                                                        isOpen = !isOpen
+                                                    }
+                                                }
+
+                                                isPressedFolder = false
+                                            }
+                                        )
+                                    }
+                                }
+
+                        ){
+                            Text((if(isOpen) "\uD83D\uDCC2" else "\uD83D\uDCC1") + folder.name)
+                            if (isChk) {
+                                Box(
+                                    contentAlignment = Alignment.CenterEnd,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(end = 10.dp)
+
+                                ) {
+                                    Icon(
+                                        imageVector = if (isCheckedFolder) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                                        tint = Color.Yellow,
+                                        contentDescription = "Checked",
+                                        modifier = Modifier
+                                    )
+                                }
+                            }
+                        }
+                        if(isOpen){
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier
+                                    .padding(start = 16.dp, top = 6.dp, bottom = 4.dp, end = 4.dp)
+                            ) {
+                                for (item in folderList) {
+
+                                    var isPressed by remember { mutableStateOf(false) }
+                                    val fastInSlowOut = tween<Float>(
+                                        durationMillis = 300,
+                                        easing = {
+                                            if (it < 0.15f) it * 2f // faster start
+                                            else 1f - (1f - it) * (1f - it) // ease out
+                                        }
+                                    )
+                                    val scale by animateFloatAsState(
+                                        targetValue = if (isPressed) 0.90f else 1f,
+                                        animationSpec = fastInSlowOut,
+                                        label = "PressScale"
+                                    )
+
+                                    var isChecked by remember { mutableStateOf(false) }
+                                    isChecked = selItemsIds.contains(item.id)
+                                    if (!isChk)
+                                        isChecked = false
+
+                                    Box(
+                                        modifier = Modifier
+                                            .graphicsLayer(
+                                                scaleX = scale,
+                                                scaleY = scale
+                                            )
+                                            .fillMaxWidth()
+                                            .height(100.dp)
+                                            .shadow(
+                                                elevation = 4.dp,
+                                                shape = RoundedCornerShape(16.dp),
+                                                ambientColor = Color.Black.copy(alpha = 1f),
+                                                spotColor = Color.Black.copy(alpha = 1f),
+                                                clip = true
+                                            )
+                                            .background(
+                                                if (!isChecked) Color.White else Color.LightGray,
+                                                RoundedCornerShape(16.dp)
+                                            )
+                                            .padding(
+                                                top = 20.dp,
+                                                bottom = 10.dp,
+                                                start = 15.dp,
+                                                end = 15.dp
+                                            )
+                                            .pointerInput(Unit) {
+                                                coroutineScope {
+                                                    detectTapGestures(
+                                                        onPress = {
+                                                            isPressed = true
+
+                                                            // Launch coroutine to detect long press
+                                                            val longPressJob = launch {
+                                                                delay(500)
+                                                                if (scale == 0.90f)
+                                                                    viewModel.enterCheckMode()
+                                                            }
+
+                                                            val released = tryAwaitRelease()
+
+                                                            if (released) {
+                                                                longPressJob.cancel()
+                                                                if (isChk) {
+                                                                    isChecked = !isChecked
+                                                                    if (isChecked) {
+                                                                        viewModel.selectItem(item.id)
+                                                                    } else {
+                                                                        viewModel.deselectItem(item.id)
+                                                                    }
+                                                                } else {
+                                                                    navController.navigate("note_page/${item.id}")
+                                                                }
+                                                            }
+
+                                                            isPressed = false
+                                                        }
+                                                    )
+                                                }
+                                            }
+
+                                    ) {
+                                        Column(
+                                            verticalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(end = 50.dp)
+                                        ) {
+                                            Text(
+                                                text = item.name,
+                                                fontSize = 18.sp,
+                                                color = Color.Black,
+                                                maxLines = 2
+                                            )
+
+                                            Text(
+                                                text = item.lastEdit.format(
+                                                    DateTimeFormatter.ofPattern(
+                                                        "dd MMMM HH:mm",
+                                                        Locale("uk")
+                                                    )
+                                                ),
+                                                fontSize = 14.sp,
+                                                color = Color.Gray
+                                            )
+                                        }
+
+
+                                        if (isChk) {
+                                            Box(
+                                                contentAlignment = Alignment.CenterEnd,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(end = 10.dp)
+
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isChecked) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                                                    tint = Color.Yellow,
+                                                    contentDescription = "Checked",
+                                                    modifier = Modifier
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                val filtered = notes.filter { it.folderId == null && it.isSecret == isSec }
+
+
+                //чисті нотатки
+                //val filtered = notes.filter { it.isSecret == isSec }
 
                 items(
                     count = filtered.size,
-                    key = { filtered[it].id }
+                    key = { "filtered-${filtered[it].id}" }
                 ) { index ->
                     var item = filtered[index]
                     var isPressed by remember { mutableStateOf(false) }
@@ -511,9 +978,9 @@ fun NoteList(
                                                 if (isChk) {
                                                     isChecked = !isChecked
                                                     if (isChecked) {
-                                                        viewModel.select(item.id)
+                                                        viewModel.selectItem(item.id)
                                                     } else {
-                                                        viewModel.deselect(item.id)
+                                                        viewModel.deselectItem(item.id)
                                                     }
                                                 } else {
                                                     navController.navigate("note_page/${item.id}")
@@ -638,9 +1105,9 @@ fun NoteList(
                                                 if (isChk) {
                                                     isChecked = !isChecked
                                                     if (isChecked) {
-                                                        viewModel.select(item.id)
+                                                        viewModel.selectItem(item.id)
                                                     } else {
-                                                        viewModel.deselect(item.id)
+                                                        viewModel.deselectItem(item.id)
                                                     }
                                                 } else {
                                                     isOpen = !isOpen

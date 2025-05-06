@@ -129,12 +129,13 @@ fun MyApp() {
     }
     val noteDao = db.noteDao()
     val quickNoteDao = db.quickNoteDao()
+    val folderDao = db.folderDao()
 
 
     val navController = rememberNavController()
 
     NavHost(navController = navController, startDestination = "home") {
-        composable("home") { NoteList(noteDao, quickNoteDao, navController) }
+        composable("home") { NoteList(noteDao, quickNoteDao, folderDao, navController) }
         composable(
             route = "note_page/{noteId}",
             arguments = listOf(navArgument("noteId") { type = NavType.IntType })
