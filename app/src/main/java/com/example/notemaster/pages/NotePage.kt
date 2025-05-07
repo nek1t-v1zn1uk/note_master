@@ -726,6 +726,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
+                                    tint = Color.Black,
                                     contentDescription = null
                                 )
                             }
@@ -754,7 +755,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                             ) {
                                 if (note!!.hasReminder()) {
                                     DropdownMenuItem(
-                                        text = { Text("Видалити нагадування") },
+                                        text = { Text("Видалити нагадування", color = Color.Black) },
                                         onClick = {
                                             expanded = false
                                             vm.setReminder(null)
@@ -764,7 +765,7 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                                     )
                                 } else {
                                     DropdownMenuItem(
-                                        text = { Text("Добавити нагадування") },
+                                        text = { Text("Добавити нагадування", color = Color.Black) },
                                         onClick = {
                                             expanded = false
                                             showDatePicker = true
@@ -772,19 +773,10 @@ fun NotePage(noteDao: NoteDao, noteId: Int, navController: NavController){
                                     )
                                 }
                                 DropdownMenuItem(
-                                    text = { Text(text = if (note!!.isSecret) "Показати" else "Приховати") },
+                                    text = { Text(text = if (note!!.isSecret) "Показати" else "Приховати", color = Color.Black) },
                                     onClick = {
                                         expanded = false
                                         vm.toggleSecret()
-                                    }
-                                )
-                                Divider(
-                                    color = Color.Black
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Експорт??") },
-                                    onClick = {
-                                        expanded = false
                                     }
                                 )
                             }

@@ -68,6 +68,8 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.heightIn
@@ -106,6 +108,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
@@ -159,7 +162,7 @@ fun HandleBackPress(
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun NoteList(
     noteDao: NoteDao,
@@ -1149,17 +1152,26 @@ fun NoteList(
                                                     .fillMaxSize()
                                                     .padding(end = 50.dp)
                                             ) {
-                                                var tags = ""
-                                                for(tag in item.tags){
-                                                    tags+="|" + tag.name
-                                                }
                                                 Text(
-                                                    text = item.name + tags,
+                                                    text = item.name,
                                                     fontSize = 18.sp,
                                                     color = Color.Black,
                                                     maxLines = 2
                                                 )
-
+                                                FlowRow(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                ){
+                                                    for(tag in item.tags){
+                                                        Text(
+                                                            text = "#" + tag.name,
+                                                            fontSize = 12.sp,
+                                                            color = Color(red = 100, green = 100, blue = 255, alpha = 160),
+                                                            fontStyle = FontStyle.Italic,
+                                                            maxLines = 1
+                                                        )
+                                                    }
+                                                }
                                                 Text(
                                                     text = item.lastEdit.format(
                                                         DateTimeFormatter.ofPattern(
@@ -1289,16 +1301,26 @@ fun NoteList(
                                 .fillMaxSize()
                                 .padding(end = 50.dp)
                         ) {
-                            var tags = ""
-                            for(tag in item.tags){
-                                tags+="|" + tag.name
-                            }
                             Text(
-                                text = item.name + tags,
+                                text = item.name,
                                 fontSize = 18.sp,
                                 color = Color.Black,
                                 maxLines = 2
                             )
+                            FlowRow(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                            ){
+                                for(tag in item.tags){
+                                    Text(
+                                        text = "#" + tag.name,
+                                        fontSize = 12.sp,
+                                        color = Color(red = 100, green = 100, blue = 255, alpha = 160),
+                                        fontStyle = FontStyle.Italic,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
 
                             Text(
                                 text = item.lastEdit.format(
