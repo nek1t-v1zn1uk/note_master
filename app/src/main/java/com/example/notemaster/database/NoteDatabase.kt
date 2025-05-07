@@ -113,6 +113,18 @@ interface NoteDao {
             insertCrossRef(NoteTagCrossRef(noteId, tag.tagId))
         }
     }
+
+    // отримати всі зв’язки note↔tag
+    @Query("SELECT * FROM note_tag_cross_ref")
+    suspend fun getAllCrossRefs(): List<NoteTagCrossRef>
+
+    // очистити всі нотатки (потрібно, щоб гарантовано замінити старі дані)
+    @Query("DELETE FROM notes")
+    suspend fun clearAllNotes()
+
+    // очистити всі мітки і зв’язки (cascade видалить cross-refs)
+    @Query("DELETE FROM tags")
+    suspend fun clearAllTags()
 }
 
 

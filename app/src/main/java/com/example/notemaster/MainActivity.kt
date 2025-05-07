@@ -17,12 +17,16 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.Button
 import android.graphics.drawable.Icon
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.rememberNavController
@@ -31,14 +35,18 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.room.Room
+import com.example.notemaster.MainActivity
 import com.example.notemaster.database.AppDatabase
 import com.example.notemaster.pages.DrawingPage
 import com.example.notemaster.pages.NoteList
 import com.example.notemaster.pages.NotePage
 import com.example.notemaster.pages.NotificationPermissionRequester
+import kotlinx.coroutines.launch
 
 
 class MainActivity : AppCompatActivity() {
+
+
     @RequiresApi(Build.VERSION_CODES.O)
     @SuppressLint("WrongThread")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -156,7 +164,6 @@ fun MyApp() {
                 navController = navController,
                 existingImageUri = imageUriString?.let { Uri.parse(it) })
         }
-        composable("profile") { HomeScreen(navController) }
     }
 
     NotificationHelper.createChannel(context)
@@ -165,12 +172,5 @@ fun MyApp() {
         requestIgnoreBatteryOptimizations(context)
         requestExactAlarmsPermission(context)
     }
-}
 
-@Composable
-fun HomeScreen(navController: NavController) {
-    // UI for Home screen and a button to navigate
-    Button(onClick = { navController.navigate("profile") }) {
-        Text("Go to Profile")
-    }
 }

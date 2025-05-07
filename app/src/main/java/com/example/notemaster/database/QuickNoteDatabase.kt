@@ -41,9 +41,11 @@ interface QuickNoteDao {
     @Query("SELECT * FROM quick_notes WHERE id = :id LIMIT 1")
     suspend fun getQuickNoteById(id: Int): QuickNoteEntity?
 
-
     @Query("DELETE FROM quick_notes WHERE id = :noteId")
     suspend fun deleteNoteById(noteId: Int)
+
+    @Query("DELETE FROM quick_notes")
+    suspend fun clearAllQuickNotes()
 }
 
 fun QuickNoteEntity.toQuickNote(): QuickNote =

@@ -3,7 +3,9 @@ package com.example.notemaster.pages
 import android.app.Activity
 import android.app.Application
 import android.app.Dialog
+import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -59,6 +61,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -80,7 +84,9 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowUp
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Timelapse
@@ -105,6 +111,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.alpha
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.notemaster.BackupManager
 import com.example.notemaster.QuickNoteScreen
 import com.example.notemaster.data.Folder
 import com.example.notemaster.data.Note
@@ -186,6 +193,45 @@ fun NoteList(
 
     val context = LocalContext.current
     val activity = remember(context) { context as AppCompatActivity }
+
+
+    val scope = rememberCoroutineScope()
+    // Лончер для збереження ZIP
+    val createBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri: Uri? ->
+        uri?.let {
+            // <— тут НЕ LaunchedEffect, а прямий запуск корутини
+            scope.launch {
+                BackupManager.exportAllBackup(
+                    context,
+                    noteDao,
+                    quickNoteDao,
+                    folderDao,
+                    it
+                )
+                Toast.makeText(context, "Бекап створено!", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Лончер для імпорту ZIP
+    val openBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            scope.launch {
+                BackupManager.importAllBackup(
+                    context,
+                    noteDao,
+                    quickNoteDao,
+                    folderDao,
+                    it
+                )
+                Toast.makeText(context, "Дані відновлено!", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
 
     HandleBackPress(
@@ -565,6 +611,36 @@ fun NoteList(
                                         isSorting = !isSorting
                                     })
                             )
+                            var showMore by remember { mutableStateOf(false) }
+                            DropdownMenu(
+                                containerColor = Color.White,
+                                expanded = showMore,
+                                onDismissRequest = { showMore = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Зробити резервну копію", color = Color.Black) },
+                                    onClick = {
+                                        createBackupLauncher.launch("notes_backup.zip")
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Завантажити резервну копію", color = Color.Black) },
+                                    onClick = {
+                                        openBackupLauncher.launch(arrayOf("application/zip"))
+                                    }
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = null,
+                                tint = Color.Black,
+                                modifier = Modifier
+                                    .size(height = 40.dp, width = 60.dp)
+                                    .padding(end = 20.dp)
+                                    .clickable(onClick = {
+                                        showMore = !showMore
+                                    })
+                            )
                         }
                     },
                     modifier = Modifier
@@ -678,7 +754,7 @@ fun NoteList(
                                                     modifier = Modifier
                                                         .fillMaxSize()
                                                 ) {
-                                                    Text(tag.name)
+                                                    Text(tag.name, color = Color.Black)
                                                     if (isSelected) {
                                                         Icon(
                                                             imageVector = Icons.Default.Check,
@@ -952,7 +1028,7 @@ fun NoteList(
                                     }
 
                             ) {
-                                Text((if (isOpen) "\uD83D\uDCC2" else "\uD83D\uDCC1") + folder.name)
+                                Text((if (isOpen) "\uD83D\uDCC2" else "\uD83D\uDCC1") + folder.name, color = Color.Black)
                                 if (isChk) {
                                     Box(
                                         contentAlignment = Alignment.CenterEnd,

@@ -37,6 +37,9 @@ interface FolderDao {
 
     @Query("DELETE FROM folders WHERE id = :folderId")
     suspend fun deleteFolderById(folderId: Int)
+
+    @Query("DELETE FROM folders")
+    suspend fun clearAllFolders()
 }
 
 // Мапери

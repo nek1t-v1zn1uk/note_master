@@ -46,12 +46,20 @@ open class ItemText(
 
 class ItemImage(
     var uri: Uri
-) : ContentItem()
+) : ContentItem(){
+    fun copy(uri: Uri = this.uri): ItemImage {
+        return ItemImage(uri)
+    }
+}
 
 class ItemFile(
     val uri: Uri,
     val fileName: String
-) : ContentItem()
+) : ContentItem(){
+    fun copy(uri: Uri = this.uri, fileName: String = this.fileName): ItemFile {
+        return ItemFile(uri, fileName)
+    }
+}
 
 class Reminder(
     var date: LocalDateTime,

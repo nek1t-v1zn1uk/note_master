@@ -21,6 +21,8 @@ import com.google.gson.stream.JsonWriter
 import java.io.IOException
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import com.google.gson.*
+import java.lang.reflect.Type
 
 class Converters {
 
@@ -188,4 +190,14 @@ class UriTypeAdapter : TypeAdapter<Uri>() {
         val s = reader.nextString()
         return Uri.parse(s)
     }
+}
+
+
+// адаптер для LocalDateTime
+class LocalDateTimeAdapter : JsonSerializer<LocalDateTime>, JsonDeserializer<LocalDateTime> {
+    private val fmt = DateTimeFormatter.ISO_LOCAL_DATE_TIME
+    override fun serialize(src: LocalDateTime?, typeOfSrc: Type, context: JsonSerializationContext) =
+        JsonPrimitive(src?.format(fmt))
+    override fun deserialize(json: JsonElement, typeOfT: Type, context: JsonDeserializationContext) =
+        LocalDateTime.parse(json.asString, fmt)
 }
