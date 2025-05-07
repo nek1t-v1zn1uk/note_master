@@ -67,10 +67,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.text.selection.TextSelectionColors
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowUp
 import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
@@ -158,6 +167,7 @@ fun NoteList(
     val selItemsIds by viewModel.selectedItemsIds.collectAsState()
     val selFoldersIds by viewModel.selectedFoldersIds.collectAsState()
 
+    var isShowFolders by remember { mutableStateOf(viewModel.showFolders.value) }
 
     val context = LocalContext.current
     val activity = remember(context) { context as AppCompatActivity }
@@ -174,7 +184,13 @@ fun NoteList(
         modifier = Modifier
             .navigationBarsPadding(),
         topBar = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .animateContentSize(
+                        animationSpec = tween(durationMillis = 250)
+                    )
+            ) {
+                var isSorting by remember { mutableStateOf(false) }
                 TopAppBar(
                     title = {
                         var showDialog by remember { mutableStateOf(false) }
@@ -507,9 +523,93 @@ fun NoteList(
                                     })
                             )
                         }
+                        else{
+                            Icon(
+                                imageVector = if (isSorting) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = null,
+                                tint = Color.Black,
+                                modifier = Modifier
+                                    .size(height = 40.dp, width = 60.dp)
+                                    .padding(end = 20.dp)
+                                    .clickable(onClick = {
+                                        isSorting = !isSorting
+                                    })
+                            )
+                        }
                     },
                     modifier = Modifier
                 )
+                if(isSorting && !isChk) {
+                    val state = viewModel.getSort()
+                    var sortName by remember { mutableStateOf(state == NoteListViewModel.SORTED_BY_NAME_AZ || state == NoteListViewModel.SORTED_BY_NAME_ZA) }
+                    var sortAZ by remember { mutableStateOf(state == NoteListViewModel.SORTED_BY_NAME_AZ || state == NoteListViewModel.SORTED_BY_LAST_EDIT_AZ) }
+                    var setSort = {
+                        var sortState = 1
+                        if (sortName == false)
+                            sortState = 3
+                        if (sortAZ == false)
+                            sortState++
+                        viewModel.setSort(sortState)
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        modifier = Modifier
+                            .padding(start = 16.dp, bottom = 8.dp)
+                    ) {
+                        if(!isQuick) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(height = 40.dp, width = 60.dp)
+                                    .padding(end = 20.dp)
+                                    .clickable(onClick = {
+                                        isShowFolders = !isShowFolders
+                                        viewModel.showFolders.value = !viewModel.showFolders.value
+                                    })
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FolderOpen,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(height = 40.dp, width = 60.dp)
+                                )
+                                Icon(
+                                    imageVector = if (isShowFolders) Icons.Default.Check else Icons.Default.Close,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .padding(top = 3.dp)
+                                        .size(height = 30.dp, width = 30.dp)
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = if (sortName) Icons.Default.TextFields else Icons.Default.Timelapse,
+                            contentDescription = null,
+                            tint = Color.Black,
+                            modifier = Modifier
+                                .size(height = 40.dp, width = 60.dp)
+                                .padding(end = 20.dp)
+                                .clickable(onClick = {
+                                    sortName = !sortName
+                                    setSort()
+                                })
+                        )
+                        Icon(
+                            imageVector = if (sortAZ) Icons.Default.KeyboardDoubleArrowUp else Icons.Default.KeyboardDoubleArrowDown,
+                            contentDescription = null,
+                            tint = Color.Black,
+                            modifier = Modifier
+                                .size(height = 40.dp, width = 60.dp)
+                                .padding(end = 20.dp)
+                                .clickable(onClick = {
+                                    sortAZ = !sortAZ
+                                    setSort()
+                                })
+                        )
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .height(2.dp)
@@ -650,56 +750,14 @@ fun NoteList(
 
             if(!isQuick) {
 
-                items(
-                    count = folders.size,
-                    key = { "folder-${folders[it].id}" }
-                ) {
-                    var folder = folders[it]
-                    Column(
-                        modifier = Modifier
-                            .shadow(
-                                elevation = 4.dp,
-                                shape = RoundedCornerShape(16.dp),
-                                ambientColor = Color.Black.copy(alpha = 1f),
-                                spotColor = Color.Black.copy(alpha = 1f),
-                                clip = true
-                            )
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.LightGray)
-                            .animateContentSize(
-                                animationSpec = tween(durationMillis = 250)
-                            )
-                    ){
-                        var isOpen by remember { mutableStateOf(false) }
-
-                        var folderList = notes.filter { it.folderId == folder.id && it.isSecret == isSec }
-
-
-                        var isPressedFolder by remember { mutableStateOf(false) }
-                        val fastInSlowOut = tween<Float>(
-                            durationMillis = 300,
-                            easing = {
-                                if (it < 0.15f) it * 2f // faster start
-                                else 1f - (1f - it) * (1f - it) // ease out
-                            }
-                        )
-                        val scaleFolder by animateFloatAsState(
-                            targetValue = if (isPressedFolder) 0.90f else 1f,
-                            animationSpec = fastInSlowOut,
-                            label = "PressScale"
-                        )
-
-                        var isCheckedFolder by remember { mutableStateOf(false) }
-                        if (!isChk)
-                            isCheckedFolder = false
-
-                        Box(
-                            contentAlignment = Alignment.CenterStart,
+                if(isShowFolders) {
+                    items(
+                        count = folders.size,
+                        key = { "folder-${folders[it].id}" }
+                    ) {
+                        var folder = folders[it]
+                        Column(
                             modifier = Modifier
-                                .graphicsLayer(
-                                    scaleX = scaleFolder,
-                                    scaleY = scaleFolder
-                                )
                                 .shadow(
                                     elevation = 4.dp,
                                     shape = RoundedCornerShape(16.dp),
@@ -707,199 +765,258 @@ fun NoteList(
                                     spotColor = Color.Black.copy(alpha = 1f),
                                     clip = true
                                 )
-                                .fillMaxWidth()
-                                .height(50.dp)
-                                .background(
-                                    if (!isCheckedFolder) Color.White else Color.LightGray,
-                                    RoundedCornerShape(16.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.LightGray)
+                                .animateContentSize(
+                                    animationSpec = tween(durationMillis = 250)
                                 )
-                                .padding(top = 10.dp, bottom = 10.dp, start = 15.dp, end = 15.dp)
-                                .pointerInput(Unit) {
-                                    coroutineScope {
-                                        detectTapGestures(
-                                            onPress = {
-                                                isPressedFolder = true
+                        ) {
+                            var isOpen by remember { mutableStateOf(false) }
 
-                                                // Launch coroutine to detect long press
-                                                val longPressJob = launch {
-                                                    delay(500)
-                                                    if (scaleFolder == 0.90f)
-                                                        viewModel.enterCheckMode()
-                                                }
+                            var folderList =
+                                notes.filter { it.folderId == folder.id && it.isSecret == isSec }
 
-                                                val released = tryAwaitRelease()
 
-                                                if (released) {
-                                                    longPressJob.cancel()
-                                                    if (isChk) {
-                                                        isCheckedFolder = !isCheckedFolder
-                                                        if (isCheckedFolder) {
-                                                            viewModel.selectFolder(folder.id)
-                                                            for (item in folderList)
-                                                                viewModel.selectItem(item.id)
-                                                        } else {
-                                                            viewModel.deselectFolder(folder.id)
-                                                            for (item in folderList)
-                                                                viewModel.deselectItem(item.id)
-                                                        }
-                                                    } else {
-                                                        isOpen = !isOpen
+                            var isPressedFolder by remember { mutableStateOf(false) }
+                            val fastInSlowOut = tween<Float>(
+                                durationMillis = 300,
+                                easing = {
+                                    if (it < 0.15f) it * 2f // faster start
+                                    else 1f - (1f - it) * (1f - it) // ease out
+                                }
+                            )
+                            val scaleFolder by animateFloatAsState(
+                                targetValue = if (isPressedFolder) 0.90f else 1f,
+                                animationSpec = fastInSlowOut,
+                                label = "PressScale"
+                            )
+
+                            var isCheckedFolder by remember { mutableStateOf(false) }
+                            if (!isChk)
+                                isCheckedFolder = false
+
+                            Box(
+                                contentAlignment = Alignment.CenterStart,
+                                modifier = Modifier
+                                    .graphicsLayer(
+                                        scaleX = scaleFolder,
+                                        scaleY = scaleFolder
+                                    )
+                                    .shadow(
+                                        elevation = 4.dp,
+                                        shape = RoundedCornerShape(16.dp),
+                                        ambientColor = Color.Black.copy(alpha = 1f),
+                                        spotColor = Color.Black.copy(alpha = 1f),
+                                        clip = true
+                                    )
+                                    .fillMaxWidth()
+                                    .height(50.dp)
+                                    .background(
+                                        if (!isCheckedFolder) Color.White else Color.LightGray,
+                                        RoundedCornerShape(16.dp)
+                                    )
+                                    .padding(
+                                        top = 10.dp,
+                                        bottom = 10.dp,
+                                        start = 15.dp,
+                                        end = 15.dp
+                                    )
+                                    .pointerInput(Unit) {
+                                        coroutineScope {
+                                            detectTapGestures(
+                                                onPress = {
+                                                    isPressedFolder = true
+
+                                                    // Launch coroutine to detect long press
+                                                    val longPressJob = launch {
+                                                        delay(500)
+                                                        if (scaleFolder == 0.90f)
+                                                            viewModel.enterCheckMode()
                                                     }
-                                                }
 
-                                                isPressedFolder = false
-                                            }
+                                                    val released = tryAwaitRelease()
+
+                                                    if (released) {
+                                                        longPressJob.cancel()
+                                                        if (isChk) {
+                                                            isCheckedFolder = !isCheckedFolder
+                                                            if (isCheckedFolder) {
+                                                                viewModel.selectFolder(folder.id)
+                                                                for (item in folderList)
+                                                                    viewModel.selectItem(item.id)
+                                                            } else {
+                                                                viewModel.deselectFolder(folder.id)
+                                                                for (item in folderList)
+                                                                    viewModel.deselectItem(item.id)
+                                                            }
+                                                        } else {
+                                                            isOpen = !isOpen
+                                                        }
+                                                    }
+
+                                                    isPressedFolder = false
+                                                }
+                                            )
+                                        }
+                                    }
+
+                            ) {
+                                Text((if (isOpen) "\uD83D\uDCC2" else "\uD83D\uDCC1") + folder.name)
+                                if (isChk) {
+                                    Box(
+                                        contentAlignment = Alignment.CenterEnd,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(end = 10.dp)
+
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isCheckedFolder) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                                            tint = Color.Yellow,
+                                            contentDescription = "Checked",
+                                            modifier = Modifier
                                         )
                                     }
                                 }
-
-                        ){
-                            Text((if(isOpen) "\uD83D\uDCC2" else "\uD83D\uDCC1") + folder.name)
-                            if (isChk) {
-                                Box(
-                                    contentAlignment = Alignment.CenterEnd,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(end = 10.dp)
-
-                                ) {
-                                    Icon(
-                                        imageVector = if (isCheckedFolder) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
-                                        tint = Color.Yellow,
-                                        contentDescription = "Checked",
-                                        modifier = Modifier
-                                    )
-                                }
                             }
-                        }
-                        if(isOpen){
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier
-                                    .padding(start = 16.dp, top = 6.dp, bottom = 4.dp, end = 4.dp)
-                            ) {
-                                for (item in folderList) {
+                            if (isOpen) {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier
+                                        .padding(
+                                            start = 16.dp,
+                                            top = 6.dp,
+                                            bottom = 4.dp,
+                                            end = 4.dp
+                                        )
+                                ) {
+                                    for (item in folderList) {
 
-                                    var isPressed by remember { mutableStateOf(false) }
-                                    val fastInSlowOut = tween<Float>(
-                                        durationMillis = 300,
-                                        easing = {
-                                            if (it < 0.15f) it * 2f // faster start
-                                            else 1f - (1f - it) * (1f - it) // ease out
-                                        }
-                                    )
-                                    val scale by animateFloatAsState(
-                                        targetValue = if (isPressed) 0.90f else 1f,
-                                        animationSpec = fastInSlowOut,
-                                        label = "PressScale"
-                                    )
-
-                                    var isChecked by remember { mutableStateOf(false) }
-                                    isChecked = selItemsIds.contains(item.id)
-                                    if (!isChk)
-                                        isChecked = false
-
-                                    Box(
-                                        modifier = Modifier
-                                            .graphicsLayer(
-                                                scaleX = scale,
-                                                scaleY = scale
-                                            )
-                                            .fillMaxWidth()
-                                            .height(100.dp)
-                                            .shadow(
-                                                elevation = 4.dp,
-                                                shape = RoundedCornerShape(16.dp),
-                                                ambientColor = Color.Black.copy(alpha = 1f),
-                                                spotColor = Color.Black.copy(alpha = 1f),
-                                                clip = true
-                                            )
-                                            .background(
-                                                if (!isChecked) Color.White else Color.LightGray,
-                                                RoundedCornerShape(16.dp)
-                                            )
-                                            .padding(
-                                                top = 20.dp,
-                                                bottom = 10.dp,
-                                                start = 15.dp,
-                                                end = 15.dp
-                                            )
-                                            .pointerInput(Unit) {
-                                                coroutineScope {
-                                                    detectTapGestures(
-                                                        onPress = {
-                                                            isPressed = true
-
-                                                            // Launch coroutine to detect long press
-                                                            val longPressJob = launch {
-                                                                delay(500)
-                                                                if (scale == 0.90f)
-                                                                    viewModel.enterCheckMode()
-                                                            }
-
-                                                            val released = tryAwaitRelease()
-
-                                                            if (released) {
-                                                                longPressJob.cancel()
-                                                                if (isChk) {
-                                                                    isChecked = !isChecked
-                                                                    if (isChecked) {
-                                                                        viewModel.selectItem(item.id)
-                                                                    } else {
-                                                                        viewModel.deselectItem(item.id)
-                                                                    }
-                                                                } else {
-                                                                    navController.navigate("note_page/${item.id}")
-                                                                }
-                                                            }
-
-                                                            isPressed = false
-                                                        }
-                                                    )
-                                                }
+                                        var isPressed by remember { mutableStateOf(false) }
+                                        val fastInSlowOut = tween<Float>(
+                                            durationMillis = 300,
+                                            easing = {
+                                                if (it < 0.15f) it * 2f // faster start
+                                                else 1f - (1f - it) * (1f - it) // ease out
                                             }
+                                        )
+                                        val scale by animateFloatAsState(
+                                            targetValue = if (isPressed) 0.90f else 1f,
+                                            animationSpec = fastInSlowOut,
+                                            label = "PressScale"
+                                        )
 
-                                    ) {
-                                        Column(
-                                            verticalArrangement = Arrangement.SpaceBetween,
+                                        var isChecked by remember { mutableStateOf(false) }
+                                        isChecked = selItemsIds.contains(item.id)
+                                        if (!isChk)
+                                            isChecked = false
+
+                                        Box(
                                             modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(end = 50.dp)
+                                                .graphicsLayer(
+                                                    scaleX = scale,
+                                                    scaleY = scale
+                                                )
+                                                .fillMaxWidth()
+                                                .height(100.dp)
+                                                .shadow(
+                                                    elevation = 4.dp,
+                                                    shape = RoundedCornerShape(16.dp),
+                                                    ambientColor = Color.Black.copy(alpha = 1f),
+                                                    spotColor = Color.Black.copy(alpha = 1f),
+                                                    clip = true
+                                                )
+                                                .background(
+                                                    if (!isChecked) Color.White else Color.LightGray,
+                                                    RoundedCornerShape(16.dp)
+                                                )
+                                                .padding(
+                                                    top = 20.dp,
+                                                    bottom = 10.dp,
+                                                    start = 15.dp,
+                                                    end = 15.dp
+                                                )
+                                                .pointerInput(Unit) {
+                                                    coroutineScope {
+                                                        detectTapGestures(
+                                                            onPress = {
+                                                                isPressed = true
+
+                                                                // Launch coroutine to detect long press
+                                                                val longPressJob = launch {
+                                                                    delay(500)
+                                                                    if (scale == 0.90f)
+                                                                        viewModel.enterCheckMode()
+                                                                }
+
+                                                                val released = tryAwaitRelease()
+
+                                                                if (released) {
+                                                                    longPressJob.cancel()
+                                                                    if (isChk) {
+                                                                        isChecked = !isChecked
+                                                                        if (isChecked) {
+                                                                            viewModel.selectItem(
+                                                                                item.id
+                                                                            )
+                                                                        } else {
+                                                                            viewModel.deselectItem(
+                                                                                item.id
+                                                                            )
+                                                                        }
+                                                                    } else {
+                                                                        navController.navigate("note_page/${item.id}")
+                                                                    }
+                                                                }
+
+                                                                isPressed = false
+                                                            }
+                                                        )
+                                                    }
+                                                }
+
                                         ) {
-                                            Text(
-                                                text = item.name,
-                                                fontSize = 18.sp,
-                                                color = Color.Black,
-                                                maxLines = 2
-                                            )
-
-                                            Text(
-                                                text = item.lastEdit.format(
-                                                    DateTimeFormatter.ofPattern(
-                                                        "dd MMMM HH:mm",
-                                                        Locale("uk")
-                                                    )
-                                                ),
-                                                fontSize = 14.sp,
-                                                color = Color.Gray
-                                            )
-                                        }
-
-
-                                        if (isChk) {
-                                            Box(
-                                                contentAlignment = Alignment.CenterEnd,
+                                            Column(
+                                                verticalArrangement = Arrangement.SpaceBetween,
                                                 modifier = Modifier
                                                     .fillMaxSize()
-                                                    .padding(end = 10.dp)
-
+                                                    .padding(end = 50.dp)
                                             ) {
-                                                Icon(
-                                                    imageVector = if (isChecked) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
-                                                    tint = Color.Yellow,
-                                                    contentDescription = "Checked",
-                                                    modifier = Modifier
+                                                Text(
+                                                    text = item.name,
+                                                    fontSize = 18.sp,
+                                                    color = Color.Black,
+                                                    maxLines = 2
                                                 )
+
+                                                Text(
+                                                    text = item.lastEdit.format(
+                                                        DateTimeFormatter.ofPattern(
+                                                            "dd MMMM HH:mm",
+                                                            Locale("uk")
+                                                        )
+                                                    ),
+                                                    fontSize = 14.sp,
+                                                    color = Color.Gray
+                                                )
+                                            }
+
+
+                                            if (isChk) {
+                                                Box(
+                                                    contentAlignment = Alignment.CenterEnd,
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(end = 10.dp)
+
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (isChecked) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                                                        tint = Color.Yellow,
+                                                        contentDescription = "Checked",
+                                                        modifier = Modifier
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -909,11 +1026,12 @@ fun NoteList(
                     }
                 }
 
-                val filtered = notes.filter { it.folderId == null && it.isSecret == isSec }
+                var filtered = notes.filter { it.folderId == null && it.isSecret == isSec }
 
 
                 //чисті нотатки
-                //val filtered = notes.filter { it.isSecret == isSec }
+                if(!isShowFolders)
+                    filtered = notes.filter { it.isSecret == isSec }
 
                 items(
                     count = filtered.size,

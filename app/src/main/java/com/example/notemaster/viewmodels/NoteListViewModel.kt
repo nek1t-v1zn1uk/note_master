@@ -24,11 +24,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.Collator
 import java.time.LocalDateTime
+import java.util.Locale
 
 class NoteListViewModel(
     application: Application,
@@ -39,21 +42,75 @@ class NoteListViewModel(
 
     private val notificationRepo = NotificationRepository(application)
 
+    private val ukCollator = Collator.getInstance(Locale("uk"))
+    private val _sortState = MutableStateFlow(SORTED_BY_NAME_AZ)
+    val showFolders = MutableStateFlow(true)
+    companion object{
+        const val NOT_SORTED = 0
+        const val SORTED_BY_NAME_AZ = 1
+        const val SORTED_BY_NAME_ZA = 2
+        const val SORTED_BY_LAST_EDIT_AZ = 3
+        const val SORTED_BY_LAST_EDIT_ZA = 4
+    }
 
     // перетворимо Flow<Entity → Flow<DomainModel>
     val allNotes: StateFlow<List<Note>> =
         noteDao.getAllNotesFlow()
             .map { list -> list.map { it.toNote() } }
+            .combine(_sortState) { notes, sort ->
+                when (sort) {
+                    SORTED_BY_NAME_AZ ->
+                        notes.sortedWith { a, b -> ukCollator.compare(a.name, b.name) }
+                    SORTED_BY_NAME_ZA ->
+                        notes.sortedWith { a, b -> ukCollator.compare(b.name, a.name) }
+                    SORTED_BY_LAST_EDIT_AZ ->
+                        notes.sortedBy { it.lastEdit }
+                    SORTED_BY_LAST_EDIT_ZA ->
+                        notes.sortedByDescending { it.lastEdit }
+                    else ->
+                        notes
+                }
+            }
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val quickNotes: StateFlow<List<QuickNote>> =
         quickNoteDao.getAllQuickNotesFlow()
             .map { list -> list.map { it.toQuickNote() } }
+            .combine(_sortState) { notes, sort ->
+                when (sort) {
+                    SORTED_BY_NAME_AZ ->
+                        notes.sortedWith { a, b -> ukCollator.compare(a.text, b.text) }
+
+                    SORTED_BY_NAME_ZA ->
+                        notes.sortedWith { a, b -> ukCollator.compare(b.text, a.text) }
+
+                    SORTED_BY_LAST_EDIT_AZ ->
+                        notes.sortedBy { it.lastEdit }
+
+                    SORTED_BY_LAST_EDIT_ZA ->
+                        notes.sortedByDescending { it.lastEdit }
+
+                    else ->
+                        notes
+                }
+            }
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val folders: StateFlow<List<Folder>> =
         folderDao.getAllFoldersFlow()
             .map { list -> list.map { it.toFolder() } }
+            .combine(_sortState) { folders, sort ->
+                when (sort) {
+                    SORTED_BY_NAME_AZ ->
+                        folders.sortedWith { a, b -> ukCollator.compare(a.name, b.name) }
+
+                    SORTED_BY_NAME_ZA ->
+                        folders.sortedWith { a, b -> ukCollator.compare(b.name, a.name) }
+
+                    else ->
+                        folders
+                }
+            }
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     // UI-стан флагів
@@ -73,6 +130,8 @@ class NoteListViewModel(
     val selectedFoldersIds: StateFlow<Set<Int>> = _selectedFoldersIds.asStateFlow()
 
     // Методи для керування станом
+    fun setSort(sort: Int) { _sortState.value = sort }
+    fun getSort(): Int { return _sortState.value }
     fun getQuickNoteById(id: Int): QuickNote? { return quickNotes.value.find { it.id == id } }
     fun toggleQuickNotes() = _isQuickNotes.update { !it }
     fun moveToQuickNotes() { _isQuickNotes.value = true }
