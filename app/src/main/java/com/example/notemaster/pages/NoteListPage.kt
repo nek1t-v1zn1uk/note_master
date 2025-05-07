@@ -64,6 +64,7 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.text.selection.TextSelectionColors
@@ -71,6 +72,8 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.filled.FilterAltOff
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -78,18 +81,26 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowUp
 import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.alpha
@@ -102,6 +113,8 @@ import com.example.notemaster.database.FolderDao
 import com.example.notemaster.database.NoteDao
 import com.example.notemaster.database.QuickNoteDao
 import com.example.notemaster.viewmodels.*
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.selects.select
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.time.LocalDateTime
@@ -166,6 +179,8 @@ fun NoteList(
     val isChk by viewModel.isCheckMode.collectAsState()
     val selItemsIds by viewModel.selectedItemsIds.collectAsState()
     val selFoldersIds by viewModel.selectedFoldersIds.collectAsState()
+    val selTags by viewModel.selectedTagIds.collectAsState()
+    val tags by viewModel.tags.collectAsState()
 
     var isShowFolders by remember { mutableStateOf(viewModel.showFolders.value) }
 
@@ -499,6 +514,21 @@ fun NoteList(
                                             isMenu = true
                                         }
                                 )
+                                var isTagsMenu by remember { mutableStateOf(false) }
+                                if(isTagsMenu){
+                                    TagPage(viewModel, { isTagsMenu = false })
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.Tag,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier
+                                        .size(height = 40.dp, width = 60.dp)
+                                        .padding(end = 20.dp)
+                                        .clickable {
+                                            isTagsMenu = true
+                                        }
+                                )
                             }
                             Icon(
                                 imageVector = Icons.Default.DeleteOutline,
@@ -608,6 +638,67 @@ fun NoteList(
                                     setSort()
                                 })
                         )
+
+                        if(!isQuick){
+                            var x = 0f
+                            var showFilters by remember { mutableStateOf(false) }
+                            Icon(
+                                imageVector = if (selTags.isEmpty()) Icons.Default.FilterAltOff else Icons.Default.FilterAlt,
+                                contentDescription = null,
+                                tint = Color.Black,
+                                modifier = Modifier
+                                    .size(height = 40.dp, width = 60.dp)
+                                    .padding(end = 20.dp)
+                                    .clickable(onClick = {
+                                        showFilters = !showFilters
+                                    })
+                            )
+                            Box(
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                DropdownMenu(
+                                    containerColor = Color.White,
+                                    expanded = showFilters,
+                                    onDismissRequest = { showFilters = false }
+                                ) {
+                                    for (tag in tags) {
+                                        var isSelected by remember {
+                                            mutableStateOf(
+                                                selTags.contains(
+                                                    tag.tagId
+                                                )
+                                            )
+                                        }
+                                        DropdownMenuItem(
+                                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp),
+                                            text = {
+                                                Row(
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                ) {
+                                                    Text(tag.name)
+                                                    if (isSelected) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Check,
+                                                            contentDescription = null
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            onClick = {
+                                                if (isSelected)
+                                                    viewModel.deselectTag(tag.tagId)
+                                                else
+                                                    viewModel.selectTag(tag.tagId)
+                                                isSelected = !isSelected
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 Box(
@@ -982,8 +1073,12 @@ fun NoteList(
                                                     .fillMaxSize()
                                                     .padding(end = 50.dp)
                                             ) {
+                                                var tags = ""
+                                                for(tag in item.tags){
+                                                    tags+="|" + tag.name
+                                                }
                                                 Text(
-                                                    text = item.name,
+                                                    text = item.name + tags,
                                                     fontSize = 18.sp,
                                                     color = Color.Black,
                                                     maxLines = 2
@@ -1118,8 +1213,12 @@ fun NoteList(
                                 .fillMaxSize()
                                 .padding(end = 50.dp)
                         ) {
+                            var tags = ""
+                            for(tag in item.tags){
+                                tags+="|" + tag.name
+                            }
                             Text(
-                                text = item.name,
+                                text = item.name + tags,
                                 fontSize = 18.sp,
                                 color = Color.Black,
                                 maxLines = 2

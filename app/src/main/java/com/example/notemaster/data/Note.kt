@@ -2,8 +2,9 @@ package com.example.notemaster.data
 
 import android.net.Uri
 import androidx.compose.ui.unit.dp
+import com.example.notemaster.data.Tag
 import java.time.LocalDateTime
-
+import kotlin.collections.List
 
 
 class Note(
@@ -13,7 +14,8 @@ class Note(
     var lastEdit: LocalDateTime = LocalDateTime.now(),
     initialReminder: Reminder? = null,
     var isSecret: Boolean = false,
-    var folderId: Int? = null
+    var folderId: Int? = null,
+    var tags: List<Tag> = emptyList()
 ){
     var reminder: Reminder? = initialReminder
         set(value){
@@ -31,6 +33,7 @@ class Note(
         lastEdit: LocalDateTime = this.lastEdit,
         reminder: Reminder? = this.reminder,
         isSecret: Boolean = this.isSecret,
-        folderId: Int? = this.folderId
-    ) = Note(id, name, content, lastEdit, reminder, isSecret, folderId)
+        folderId: Int? = this.folderId,
+        tags: List<Tag> = this.tags
+    ) = Note(id, name, content, lastEdit, reminder, isSecret, folderId, tags)
 }

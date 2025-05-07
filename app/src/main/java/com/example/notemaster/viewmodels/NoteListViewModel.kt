@@ -1,6 +1,7 @@
 package com.example.notemaster.viewmodels
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -11,7 +12,9 @@ import com.example.notemaster.data.ItemText
 import com.example.notemaster.data.Note
 import com.example.notemaster.database.NoteDao
 import com.example.notemaster.data.QuickNote
+import com.example.notemaster.data.Tag
 import com.example.notemaster.database.FolderDao
+import com.example.notemaster.database.NoteTagCrossRef
 import com.example.notemaster.database.QuickNoteDao
 import com.example.notemaster.repositories.NotificationRepository
 import com.example.notemaster.database.toEntity
@@ -20,18 +23,22 @@ import com.example.notemaster.database.toFolderEntity
 import com.example.notemaster.database.toNote
 import com.example.notemaster.database.toQuickNote
 import com.example.notemaster.database.toQuickNoteEntity
+import com.example.notemaster.database.toTag
+import com.example.notemaster.database.toTagEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.Collator
 import java.time.LocalDateTime
 import java.util.Locale
+import kotlin.collections.map
 
 class NoteListViewModel(
     application: Application,
@@ -53,10 +60,33 @@ class NoteListViewModel(
         const val SORTED_BY_LAST_EDIT_ZA = 4
     }
 
+    private val _recomposeTrigger = MutableStateFlow(0)
+    private fun triggerRecompose() {
+        _recomposeTrigger.value += 1
+    }
+
     // перетворимо Flow<Entity → Flow<DomainModel>
     val allNotes: StateFlow<List<Note>> =
         noteDao.getAllNotesFlow()
-            .map { list -> list.map { it.toNote() } }
+            .combine(_recomposeTrigger) { notes, _ -> notes }
+            .mapLatest { entities ->
+                entities.map { ne ->
+                    val tagNames = noteDao.getTagsForNote(ne.id).map { it.toTag() }
+                    ne.toNote().copy(tags = tagNames)
+                }
+                    .filter { note ->
+                        if (_selectedTagIds.value.isEmpty())
+                            return@filter true
+                        else {
+                            for (id in _selectedTagIds.value) {
+                                if (note.tags.find{it.tagId == id} == null) {
+                                    return@filter false
+                                }
+                            }
+                            true
+                        }
+                    }
+            }
             .combine(_sortState) { notes, sort ->
                 when (sort) {
                     SORTED_BY_NAME_AZ ->
@@ -113,6 +143,12 @@ class NoteListViewModel(
             }
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    val tags: StateFlow<List<Tag>> =
+        noteDao.getAllTagsFlow()
+            .map { list -> list.map { it.toTag() } }
+            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+
     // UI-стан флагів
     private val _isQuickNotes = MutableStateFlow(false)
     val isQuickNotes: StateFlow<Boolean> = _isQuickNotes.asStateFlow()
@@ -128,6 +164,9 @@ class NoteListViewModel(
 
     private val _selectedFoldersIds = MutableStateFlow<Set<Int>>(emptySet())
     val selectedFoldersIds: StateFlow<Set<Int>> = _selectedFoldersIds.asStateFlow()
+
+    private val _selectedTagIds = MutableStateFlow<Set<Int>>(emptySet())
+    val selectedTagIds: StateFlow<Set<Int>> = _selectedTagIds.asStateFlow()
 
     // Методи для керування станом
     fun setSort(sort: Int) { _sortState.value = sort }
@@ -149,6 +188,14 @@ class NoteListViewModel(
     fun deselectItem(id: Int)   = _selectedItemsIds.update { it - id }
     fun selectFolder(id: Int)     = _selectedFoldersIds.update { it + id }
     fun deselectFolder(id: Int)   = _selectedFoldersIds.update { it - id }
+    fun selectTag(id: Int) {
+        _selectedTagIds.update { it + id }
+        triggerRecompose()
+    }
+    fun deselectTag(id: Int) {
+        _selectedTagIds.update { it - id }
+        triggerRecompose()
+    }
 
     fun convertQuickNotesToNotes() {
         viewModelScope.launch {
@@ -195,19 +242,63 @@ class NoteListViewModel(
         }
     }
 
+    fun addTagToSelected(tId: Int?){
+        viewModelScope.launch {
+            if(tId != null) {
+                for (id in _selectedItemsIds.value) {
+                    noteDao.insertCrossRef(
+                        NoteTagCrossRef(
+                            noteId = id,
+                            tagId = tId
+                        )
+                    )
+                }
+            }
+            else{
+                for (id in _selectedItemsIds.value) {
+                    noteDao.clearTagsForNote(id)
+                }
+            }
+            triggerRecompose()
+        }
+    }
+    fun removeTagToSelected(tId: Int){
+        viewModelScope.launch {
+            for (id in _selectedItemsIds.value) {
+                noteDao.deleteCrossRef(
+                        noteId = id,
+                        tagId = tId
+                    )
+            }
+            triggerRecompose()
+        }
+    }
+    fun selectedHasTag(tId: Int): Boolean{
+        for(id in _selectedItemsIds.value){
+            if((allNotes.value.find { it.id == id })!!.tags.find { it.tagId == tId } != null)
+                return true
+        }
+        return false
+    }
+    fun allSelectedHasTag(tId: Int): Boolean{
+        for(id in _selectedItemsIds.value){
+            if((allNotes.value.find { it.id == id })!!.tags.find { it.tagId == tId } == null)
+                return false
+        }
+        return true
+    }
+
     //CRUD
     fun addNote(note: Note) {
         viewModelScope.launch {
             noteDao.insert(note.toEntity())
         }
     }
-
     fun updateNote(note: Note) {
         viewModelScope.launch {
             noteDao.update(note.toEntity())
         }
     }
-
     fun deleteNoteById(id: Int) {
         viewModelScope.launch {
             noteDao.deleteNoteById(id)
@@ -235,6 +326,19 @@ class NoteListViewModel(
             folderDao.deleteFolderById(fId)
         }
     }
+
+    fun addTag(tag: Tag){
+        viewModelScope.launch {
+            noteDao.insertTag(tag.toTagEntity())
+        }
+    }
+    fun deleteTag(tId: Int){
+        viewModelScope.launch {
+            noteDao.deleteTagById(tId)
+            triggerRecompose()
+        }
+    }
+
 
 }
 

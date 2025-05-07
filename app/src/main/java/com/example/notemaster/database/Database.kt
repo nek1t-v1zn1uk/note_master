@@ -30,8 +30,8 @@ import java.time.format.DateTimeFormatter
 
 
 @Database(
-    entities = [NoteEntity::class, QuickNoteEntity::class, FolderEntity::class],
-    version = 8,
+    entities = [NoteEntity::class, QuickNoteEntity::class, FolderEntity::class, TagEntity::class, NoteTagCrossRef::class],
+    version = 9,
     exportSchema = false
 )
 

@@ -8,6 +8,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.example.notemaster.data.Content
 import com.example.notemaster.data.Note
@@ -40,7 +41,7 @@ data class NoteEntity(
 @Dao
 interface NoteDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(note: NoteEntity)
+    suspend fun insert(note: NoteEntity): Long
 
     @Update
     suspend fun update(note: NoteEntity)
@@ -65,6 +66,53 @@ interface NoteDao {
 
     @Query("SELECT * FROM notes WHERE folderId = :folderId ORDER BY lastEdit DESC")
     fun getNotesByFolderFlow(folderId: Int): Flow<List<NoteEntity>>
+
+    // — CRUD для міток —
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTag(tag: TagEntity): Long
+
+    @Query("DELETE FROM tags WHERE tagId = :tagId")
+    suspend fun deleteTagById(tagId: Int)
+
+    @Query("SELECT * FROM tags WHERE name = :name LIMIT 1")
+    suspend fun findTagByName(name: String): TagEntity?
+
+    @Query("SELECT * FROM tags ORDER BY name")
+    fun getAllTagsFlow(): Flow<List<TagEntity>>
+
+    // — Робота з крос-рефами —
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCrossRef(ref: NoteTagCrossRef)
+
+    @Query("DELETE FROM note_tag_cross_ref WHERE noteId = :noteId")
+    suspend fun clearTagsForNote(noteId: Int)
+
+    @Query("""
+      DELETE FROM note_tag_cross_ref 
+       WHERE noteId = :noteId 
+         AND tagId  = :tagId
+    """)
+    suspend fun deleteCrossRef(noteId: Int, tagId: Int)
+
+    @Query("""
+      SELECT t.*
+        FROM tags AS t
+        JOIN note_tag_cross_ref AS r ON t.tagId = r.tagId
+       WHERE r.noteId = :noteId
+    """)
+    suspend fun getTagsForNote(noteId: Int): List<TagEntity>
+
+    // — Утиліта для запису нотатки разом із мітками —
+    @Transaction
+    suspend fun upsertNoteWithTags(note: NoteEntity, tagNames: List<String>) {
+        val noteId = insert(note).toInt()
+        clearTagsForNote(noteId)
+        tagNames.forEach { name ->
+            val tag = findTagByName(name)
+                ?: TagEntity(name = name).also { it.tagId = insertTag(it).toInt() }
+            insertCrossRef(NoteTagCrossRef(noteId, tag.tagId))
+        }
+    }
 }
 
 
