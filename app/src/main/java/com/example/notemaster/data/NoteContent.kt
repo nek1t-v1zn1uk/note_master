@@ -24,18 +24,6 @@ class Content(
         return list.sumOf { if (it is ItemText) it.getSymbolCount() else 0 }
     }
 }
-/*
-abstract class ContentItem() {
-    var id: Int = 0
-    companion object{
-        var lastId = 0
-    }
-    init {
-        id = lastId + 1
-        lastId = id
-    }
-}
-*/
 abstract class ContentItem {
     var id: Int = nextId()
     companion object {
@@ -44,13 +32,7 @@ abstract class ContentItem {
         fun resetLastId(to: Int) { lastId = to }
     }
 }
-/*
-data class TextStyle(
-    val size: Float = 18f,
-    val bold: Boolean = false,
-    val highlight: Boolean = false
-)
- */
+
 open class ItemText(
     open var text: String = "",
 ) : ContentItem() {
@@ -61,34 +43,15 @@ open class ItemText(
     }
 }
 
-class ItemCheckBox(
-    text: String = "",
-    style: MutableMap<String, Any> = mutableMapOf(
-        "size" to 18.dp,
-        "bold" to false,
-        "highlight" to false
-    ),
-    hasCheckBox: Boolean = false) : ItemText(text,){
-
-    var hasCheckBox: Boolean = false
-
-    init {
-        this.hasCheckBox = hasCheckBox
-    }
-}
 
 class ItemImage(
     var uri: Uri
-) : ContentItem() {
-
-}
+) : ContentItem()
 
 class ItemFile(
     val uri: Uri,
     val fileName: String
-) : ContentItem(){
-
-}
+) : ContentItem()
 
 class Reminder(
     var date: LocalDateTime,

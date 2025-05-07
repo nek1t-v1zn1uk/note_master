@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.room.TypeConverter
 import com.example.notemaster.data.Content
 import com.example.notemaster.data.ContentItem
-import com.example.notemaster.data.ItemCheckBox
 import com.example.notemaster.data.ItemFile
 import com.example.notemaster.data.ItemImage
 import com.example.notemaster.data.ItemText
@@ -79,7 +78,6 @@ class ContentItemTypeAdapterFactory : TypeAdapterFactory {
         if (type.rawType != ContentItem::class.java) return null
 
         val itemTextAdapter = gson.getDelegateAdapter(this, TypeToken.get(ItemText::class.java))
-        val itemCheckBoxAdapter = gson.getDelegateAdapter(this, TypeToken.get(ItemCheckBox::class.java))
         val itemImageAdapter = gson.getDelegateAdapter(this, TypeToken.get(ItemImage::class.java))
         val itemFileAdapter = gson.getDelegateAdapter(this, TypeToken.get(ItemFile::class.java))
 
@@ -93,7 +91,6 @@ class ContentItemTypeAdapterFactory : TypeAdapterFactory {
                 out.beginObject()
                 val actualType = when (value) {
                     is ItemText -> "ItemText"
-                    is ItemCheckBox -> "ItemCheckBox"
                     is ItemImage -> "ItemImage"
                     is ItemFile -> "ItemFile"
                     else -> throw IllegalArgumentException("Unknown type: ${value.javaClass}")
@@ -102,7 +99,6 @@ class ContentItemTypeAdapterFactory : TypeAdapterFactory {
                 out.name("data")
                 when (value) {
                     is ItemText -> itemTextAdapter.write(out, value)
-                    is ItemCheckBox -> itemCheckBoxAdapter.write(out, value)
                     is ItemImage -> itemImageAdapter.write(out, value)
                     is ItemFile -> itemFileAdapter.write(out, value)
                 }
@@ -127,7 +123,6 @@ class ContentItemTypeAdapterFactory : TypeAdapterFactory {
 
                 val actualAdapter = when (type) {
                     "ItemText" -> itemTextAdapter
-                    "ItemCheckBox" -> itemCheckBoxAdapter
                     "ItemImage" -> itemImageAdapter
                     "ItemFile" -> itemFileAdapter
                     else -> throw IllegalArgumentException("Unknown type: $type")

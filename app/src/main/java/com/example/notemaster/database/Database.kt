@@ -8,7 +8,6 @@ import androidx.room.*
 import com.example.notemaster.data.Content
 import com.example.notemaster.data.ContentItem
 import com.example.notemaster.data.Folder
-import com.example.notemaster.data.ItemCheckBox
 import com.example.notemaster.data.ItemFile
 import com.example.notemaster.data.ItemImage
 import com.example.notemaster.data.ItemText

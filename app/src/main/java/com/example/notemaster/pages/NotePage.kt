@@ -970,17 +970,6 @@ fun NoteContent(
                 var modifierPart: Modifier = Modifier
 
                 when (item) {
-                    /*is ItemCheckBox -> {
-                        CheckBoxPart(
-                            item.text,
-                            item.hasCheckBox,
-                            index,
-                            focusRequester,
-                            Modifier.onGloballyPositioned { coords ->
-                                lazyColumnHeightPx -= coords.size.height
-                            }
-                        )
-                    }*/
 
                     is ItemText -> {
                         if (index == contentListSnapshot.lastIndex) {
@@ -1261,57 +1250,6 @@ fun TextPart(
             }
     )
 }
-
-/*
-@Composable
-fun CheckBoxPart(
-    value: String,
-    isChecked: Boolean = false,
-    indexInList: Int,
-    focusRequester: FocusRequester,
-    modifier: Modifier = Modifier){
-    var textFieldValue by remember { mutableStateOf(TextFieldValue(value)) }
-    var isCheckedValue by remember { mutableStateOf(isChecked) }
-
-    LaunchedEffect(Unit) {
-        if(indexInList == FocusedItem.indexInList && FocusedItem.changeNeeded){
-            Log.d("Shit", "CB - indexInList:${indexInList}; ")
-            focusRequester.requestFocus()
-            textFieldValue = textFieldValue.copy(selection = TextRange(FocusedItem.cursorStart))
-            FocusedItem.changeNeeded = false
-        }
-    }
-    Row(
-        modifier = modifier
-    ) {
-        Checkbox(
-            checked = isCheckedValue,
-            onCheckedChange = { isCheckedValue = it }
-        )
-        TextField(
-            value = textFieldValue,
-            onValueChange = { newValue ->
-                textFieldValue = newValue
-
-                /*
-                val selection = newValue.selection
-                if (!selection.collapsed) {
-                    val selectedText = newValue.text.substring(selection.start, selection.end)
-                    Log.d("Selection", "Selected: $selectedText")
-                }
-                */
-            },
-            singleLine = false,
-            maxLines = Int.MAX_VALUE,
-            textStyle = TextStyle(fontSize = 18.sp),
-            modifier = modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester)
-                .focusable()
-        )
-    }
-}
-*/
 
 
 @Composable
